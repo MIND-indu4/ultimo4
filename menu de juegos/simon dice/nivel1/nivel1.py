@@ -12,8 +12,25 @@ class SilabasGame:
     def __init__(self, master):
         self.master = master
         master.title("Simón Dice: Las Sílabas")
-        master.geometry("800x600")
+
+        # ✅ Pantalla completa y escala
+        screen_width = master.winfo_screenwidth()
+        screen_height = master.winfo_screenheight()
+        base_width = 800
+        base_height = 600
+        self.scale = min(screen_width / base_width, screen_height / base_height)
+
+        master.attributes("-fullscreen", True)
         master.configure(bg="#FF5757")
+
+        # --- AÑADIDO: Atajo para salir de pantalla completa (Escape) ---
+        master.bind("<Escape>", lambda e: master.attributes("-fullscreen", False))
+
+        # ✅ Aplicar escala
+        self._apply_scaling()
+
+        # --- AÑADIDO: Definir el directorio actual para rutas relativas ---
+        self.current_dir = os.path.dirname(__file__)
 
         self.all_words_data = [
             {"word": "ASUSTADO", "syllables": ["A", "SUS", "TA", "DO"], "image": "asustado.png"},
@@ -29,13 +46,9 @@ class SilabasGame:
             {"word": "APRENDER", "syllables": ["A", "PREN", "DER"], "image": "aprender.png"},
             {"word": "CANTAR", "syllables": ["CAN", "TAR"], "image": "cantar.png"},
             {"word": "ABRAZO", "syllables": ["A", "BRA", "ZO"], "image": "abrazo.png"},
-
+            # {"word": "BANANA", "syllables": ["BA", "NA", "NA"], "image": "banana.png"}, # Si añades banana, recuerda la imagen
         ]
         
-        # Eliminar las palabras "BAILAR", "MIRAR", "OIR", "AGARRAR" y "MIRAR" si ya no las quieres.
-        # Por lo que veo en tu código, ya no están en la lista que proporcionaste,
-        # así que solo necesitas añadir "ABRAZO" y "BANANA".
-
         self.current_word_list = []
         self.current_word_index = 0
         self.current_syllable_index = 0
@@ -52,14 +65,14 @@ class SilabasGame:
             messagebox.showerror("Error de Audio", f"No se pudo inicializar el sistema de audio. {e}")
 
         # --- Carpeta para guardar los audios generados ---
-        self.audio_cache_dir = os.path.join(os.path.dirname(__file__), "audio_cache")
+        self.audio_cache_dir = os.path.join(self.current_dir, "audio_cache") # Usa self.current_dir
         if not os.path.exists(self.audio_cache_dir):
             os.makedirs(self.audio_cache_dir)
             print(f"Carpeta '{self.audio_cache_dir}' creada para audios generados.")
 
         self.canvas = tk.Canvas(master, bg="#FAD4D4", highlightthickness=0)
-        self.canvas.place(relx=0.5, rely=0.5, anchor="center", width=700, height=500)
-        self.draw_rounded_rect(self.canvas, 0, 0, 700, 500, radius=20, fill="white", outline="white")
+        self.canvas.place(relx=0.5, rely=0.5, anchor="center", width=self.canvas_width, height=self.canvas_height)
+        self.draw_rounded_rect(self.canvas, 0, 0, self.canvas_width, self.canvas_height, radius=int(20 * self.scale), fill="white", outline="white")
         self.inner_frame = tk.Frame(self.canvas, bg="white")
         self.inner_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
 
@@ -68,15 +81,18 @@ class SilabasGame:
         self.title_container.place(relx=0.5, rely=0.1, anchor="center")
 
         try:
-            speaker_icon_path = "sonido.jpg"
-            speaker_icon_pil = Image.open(speaker_icon_path).resize((30, 30), Image.Resampling.LANCZOS)
+            # --- CORREGIDO: Ruta absoluta y coma extra en resize ---
+            speaker_icon_path = os.path.join(self.current_dir, "sonido.jpg")
+            speaker_icon_pil = Image.open(speaker_icon_path).resize((self.icon_size, self.icon_size), Image.Resampling.LANCZOS)
             self.speaker_title_photo = ImageTk.PhotoImage(speaker_icon_pil) 
             self.speaker_title_label = tk.Label(self.title_container, image=self.speaker_title_photo, bg="white")
             self.speaker_title_label.pack(side=tk.LEFT, padx=5)
         except FileNotFoundError:
             print(f"Advertencia: No se encontró la imagen '{speaker_icon_path}'.")
+        except Exception as e:
+            print(f"Error al cargar el icono de sonido del título: {e}")
         
-        self.title_label = tk.Label(self.title_container, text="SIMÓN DICE", font=("Arial", 24, "bold"), bg="white")
+        self.title_label = tk.Label(self.title_container, text="SIMÓN DICE", font=self.title_font, bg="white")
         self.title_label.pack(side=tk.LEFT)
 
         self.main_image_label = tk.Label(self.inner_frame, bg="white")
@@ -87,8 +103,9 @@ class SilabasGame:
         self.syllable_container.place(relx=0.5, rely=0.65, anchor="center")
 
         try:
-            speaker_icon_path = "sonido.jpg" 
-            speaker_icon_pil = Image.open(speaker_icon_path).resize((30, 30), Image.Resampling.LANCZOS)
+            # --- CORREGIDO: Ruta absoluta para el icono de sonido de la sílaba ---
+            speaker_icon_path = os.path.join(self.current_dir, "sonido.jpg")
+            speaker_icon_pil = Image.open(speaker_icon_path).resize((self.icon_size, self.icon_size), Image.Resampling.LANCZOS) # Usa self.icon_size para escalar
             self.speaker_syllable_photo = ImageTk.PhotoImage(speaker_icon_pil) 
             self.speaker_syllable_label = tk.Label(self.syllable_container, image=self.speaker_syllable_photo, bg="white")
             self.speaker_syllable_label.pack(side=tk.LEFT, padx=5)
@@ -96,8 +113,10 @@ class SilabasGame:
             self.speaker_syllable_label.bind("<Button-1>", self._on_syllable_speaker_click)
         except FileNotFoundError:
             print(f"Advertencia: No se encontró la imagen '{speaker_icon_path}' para la sílaba.")
+        except Exception as e:
+            print(f"Error al cargar el icono de sonido de la sílaba: {e}")
         
-        self.syllable_label = tk.Label(self.syllable_container, text="", font=("Arial", 36, "bold"), bg="white")
+        self.syllable_label = tk.Label(self.syllable_container, text="", font=self.syllable_font, bg="white")
         self.syllable_label.pack(side=tk.LEFT)
 
         # --- Contenedor para los botones "Nivel 1" y "Volver al Menú" ---
@@ -105,45 +124,47 @@ class SilabasGame:
         self.bottom_buttons_container.place(relx=0.5, rely=0.85, anchor="center")
 
         # ---------- Botón REPETIR (circular, arriba-derecha) ----------
-        self.repeat_circle = tk.Canvas(self.inner_frame, bg="white", highlightthickness=0, width=50, height=50)
-        self.draw_rounded_rect(self.repeat_circle, 0, 0, 50, 50, radius=25,
+        self.repeat_circle = tk.Canvas(self.inner_frame, bg="white", highlightthickness=0, width=self.repeat_button_size, height=self.repeat_button_size)
+        self.draw_rounded_rect(self.repeat_circle, 0, 0, self.repeat_button_size, self.repeat_button_size, radius=int(self.repeat_button_size / 2), # Usa self.repeat_button_size
                             fill="#FFB347", outline="#FFB347")
-        self.repeat_circle.create_text(25, 25, text="🔊", font=("Arial", 18), fill="white")
+        # --- CORREGIDO: Fuente escalada ---
+        self.repeat_circle.create_text(self.repeat_button_size / 2, self.repeat_button_size / 2, text="🔊", font=self.repeat_font, fill="white")
         self.repeat_circle.place(relx=0.95, rely=0.05, anchor="ne")
         self.repeat_circle.bind("<Button-1>", lambda e: self.repeat_current_syllable())
 
         # Botón "Nivel 1" (ahora dentro del contenedor)
-        self.level_button_canvas = tk.Canvas(self.bottom_buttons_container, bg="white", highlightthickness=0, width=150, height=50)
-        self.draw_rounded_rect(self.level_button_canvas, 0, 0, 150, 50, radius=15, fill="#FF6B6B", outline="#FF6B6B")
-        self.level_button_text = self.level_button_canvas.create_text(75, 25, text="Nivel 1", font=("Arial", 16, "bold"), fill="white")
+        self.level_button_canvas = tk.Canvas(self.bottom_buttons_container, bg="white", highlightthickness=0, width=self.level_button_width, height=self.level_button_height)
+        self.draw_rounded_rect(self.level_button_canvas, 0, 0, self.level_button_width, self.level_button_height, radius=int(15 * self.scale), fill="#FF6B6B", outline="#FF6B6B") # Usa medidas escaladas
+        self.level_button_text = self.level_button_canvas.create_text(self.level_button_width / 2, self.level_button_height / 2, text="Nivel 1", font=self.button_font, fill="white") # Usa medidas escaladas
         self.level_button_canvas.bind("<Button-1>", lambda e: self.next_word_or_syllable()) # Mantiene la funcionalidad
-        self.level_button_canvas.pack(side=tk.LEFT, padx=10) # Empaqueta a la izquierda con padding
+        self.level_button_canvas.pack(side=tk.LEFT, padx=int(10 * self.scale)) # Empaqueta a la izquierda con padding escalado
 
         # NUEVO Botón "Volver al Menú"
-        self.menu_button_canvas = tk.Canvas(self.bottom_buttons_container, bg="white", highlightthickness=0, width=200, height=50)
-        self.draw_rounded_rect(self.menu_button_canvas, 0, 0, 200, 50, radius=15, fill="#5B84B1", outline="#5B84B1") 
-        self.menu_button_text = self.menu_button_canvas.create_text(100, 25, text="Volver al Menú", font=("Arial", 16, "bold"), fill="white")
+        self.menu_button_canvas = tk.Canvas(self.bottom_buttons_container, bg="white", highlightthickness=0, width=self.menu_button_width, height=self.menu_button_height)
+        self.draw_rounded_rect(self.menu_button_canvas, 0, 0, self.menu_button_width, self.menu_button_height, radius=int(15 * self.scale), fill="#5B84B1", outline="#5B84B1") # Usa medidas escaladas
+        self.menu_button_text = self.menu_button_canvas.create_text(self.menu_button_width / 2, self.menu_button_height / 2, text="Volver al Menú", font=self.button_font, fill="white") # Usa self.button_font para consistencia
         self.menu_button_canvas.bind("<Button-1>", self.go_to_menu) # Enlaza a una nueva función
-        self.menu_button_canvas.pack(side=tk.LEFT, padx=10) # Empaqueta a la izquierda con padding
+        self.menu_button_canvas.pack(side=tk.LEFT, padx=int(10 * self.scale)) # Empaqueta a la izquierda con padding escalado
 
         # Botón "Siguiente" (flecha derecha)
-        self.next_button = tk.Button(self.inner_frame, text=">", font=("Arial", 30, "bold"),
+        self.next_button = tk.Button(self.inner_frame, text=">", font=self.arrow_font, # Usa self.arrow_font
                                      bg="white", fg="#FF6B6B", relief="flat", command=self.next_word_or_syllable)
         self.next_button.place(relx=0.75, rely=0.4, anchor="center")
 
         # Botón "Anterior" (flecha izquierda)
-        self.prev_button = tk.Button(self.inner_frame, text="<", font=("Arial", 30, "bold"),
+        self.prev_button = tk.Button(self.inner_frame, text="<", font=self.arrow_font, # Usa self.arrow_font
                                      bg="white", fg="#FF6B6B", relief="flat", command=self.prev_syllable)
         self.prev_button.place(relx=0.25, rely=0.4, anchor="center")
 
-        self.syllable_count_label = tk.Label(self.inner_frame, text="", font=("Arial", 14), bg="white")
+        self.syllable_count_label = tk.Label(self.inner_frame, text="", font=self.count_font, bg="white") # Usa self.count_font
         self.syllable_count_label.place(relx=0.9, rely=0.9, anchor="e")
 
         # Icono de oreja "escuchar.png"
         try:
-            ear_icon_path = "escuchar.png"
+            # --- CORREGIDO: Ruta absoluta para el icono de oreja ---
+            ear_icon_path = os.path.join(self.current_dir, "escuchar.png")
             original_ear_img_pil = Image.open(ear_icon_path)
-            desired_ear_height = 100
+            desired_ear_height = self.ear_height
             aspect_ratio_ear = original_ear_img_pil.width / original_ear_img_pil.height
             desired_ear_width = int(desired_ear_height * aspect_ratio_ear)
 
@@ -153,10 +174,41 @@ class SilabasGame:
             self.ear_label.place(relx=0.08, rely=0.85, anchor="w")
         except FileNotFoundError:
             print(f"Error: No se encontró la imagen '{ear_icon_path}'. Asegúrate de que esté en la misma carpeta.")
-            self.ear_label = tk.Label(self.inner_frame, text="[Escuchar]", font=("Arial", 14), bg="white")
+            self.ear_label = tk.Label(self.inner_frame, text="[Escuchar]", font=self.count_font, bg="white") # Usa self.count_font
             self.ear_label.place(relx=0.08, rely=0.92, anchor="w")
+        except Exception as e:
+            print(f"Error al cargar el icono de oreja: {e}")
+
 
         self.update_display()
+
+    def _apply_scaling(self):
+        scale = self.scale
+
+        # Tamaños principales
+        self.canvas_width = int(700 * scale)
+        self.canvas_height = int(500 * scale)
+        self.image_width = int(200 * scale) # Se usará en load_word_image
+        
+        # Fuentes
+        self.title_font = ("Arial", int(24 * scale), "bold")
+        self.syllable_font = ("Arial", int(36 * scale), "bold")
+        self.button_font = ("Arial", int(16 * scale), "bold")
+        self.small_button_font = ("Arial", int(12 * scale), "bold")
+        self.count_font = ("Arial", int(14 * scale))
+        self.arrow_font = ("Arial", int(30 * scale), "bold")
+        self.repeat_font = ("Arial", int(18 * scale))
+        
+        # Botones
+        self.level_button_width = int(150 * scale)
+        self.level_button_height = int(50 * scale)
+        self.menu_button_width = int(200 * scale)
+        self.menu_button_height = int(50 * scale)
+        self.repeat_button_size = int(50 * scale)
+        
+        # Íconos
+        self.icon_size = int(30 * scale)
+        self.ear_height = int(100 * scale)
 
     def draw_rounded_rect(self, canvas, x1, y1, x2, y2, radius, **kwargs):
         points = [x1 + radius, y1,
@@ -281,9 +333,12 @@ class SilabasGame:
 
     def load_word_image(self, image_filename):
         try:
-            image_path = image_filename
+            # --- CORREGIDO: Usar self.current_dir para la ruta de la imagen de la palabra ---
+            image_path = os.path.join(self.current_dir, image_filename)
             original_img_pil = Image.open(image_path)
-            desired_width = 200
+            
+            # --- CORREGIDO: Usar self.image_width para el redimensionamiento escalado ---
+            desired_width = self.image_width 
             aspect_ratio = original_img_pil.width / original_img_pil.height
             desired_height = int(desired_width / aspect_ratio)
 
@@ -315,7 +370,10 @@ class SilabasGame:
             messagebox.showinfo("Juego", "No hay palabras para retroceder.")
             return
 
-        if self.current_word_index < 0:
+        # La condición self.current_word_index < 0 nunca se cumplirá aquí si se inicializa a 0 o más
+        # Esta parte se puede simplificar o mover si realmente quieres un bucle completo.
+        # Por ahora, la mantengo ya que no causa un error y tiene un messagebox informativo.
+        if self.current_word_index < 0: 
             self.current_word_index = 0 
             self.current_syllable_index = 0
             self.update_display()
@@ -339,44 +397,46 @@ class SilabasGame:
     def _show_word_complete_screen(self, completed_word):
         win_screen = tk.Toplevel(self.master)
         win_screen.title("¡Palabra Completada!")
-        win_screen.geometry("400x250") 
+        win_width = int(400 * self.scale)
+        win_height = int(250 * self.scale)
+        win_screen.geometry(f"{win_width}x{win_height}")
         win_screen.resizable(False, False)
         win_screen.attributes("-topmost", True) 
         win_screen.grab_set() 
 
         win_screen.protocol("WM_DELETE_WINDOW", lambda: self._on_complete_screen_close(win_screen))
 
-        frame = tk.Frame(win_screen, bg="white", padx=20, pady=20) 
+        frame = tk.Frame(win_screen, bg="white", padx=int(20 * self.scale), pady=int(20 * self.scale)) # Escalado de padding
         frame.pack(expand=True, fill="both")
 
         message_label = tk.Label(frame, text="¡Felicidades!",
-                                 font=("Arial", 24, "bold"),
+                                 font=("Arial", int(24 * self.scale), "bold"), # Escalado de fuente
                                  bg="white", fg="#FF5757") 
-        message_label.pack(pady=(10, 5))
+        message_label.pack(pady=(int(10 * self.scale), int(5 * self.scale))) # Escalado de padding
 
         sub_message_label = tk.Label(frame, text=f"¡Completaste la palabra '{completed_word}'! 🎉",
-                                      font=("Arial", 14),
+                                      font=("Arial", int(14 * self.scale)), # Escalado de fuente
                                       bg="white", fg="#FF5757")
-        sub_message_label.pack(pady=(0, 20))
+        sub_message_label.pack(pady=(0, int(20 * self.scale))) # Escalado de padding
 
         button_frame = tk.Frame(frame, bg="white")
-        button_frame.pack(pady=10)
+        button_frame.pack(pady=int(10 * self.scale)) # Escalado de padding
 
         next_button = tk.Button(button_frame, text="Siguiente Palabra",
-                                font=("Arial", 12, "bold"),
+                                font=self.small_button_font,
                                 bg="#FF6B6B", fg="white", 
                                 activebackground="#E04D4D",
-                                relief="flat", bd=0, padx=15, pady=8,
+                                relief="flat", bd=0, padx=int(15 * self.scale), pady=int(8 * self.scale), # Escalado de padding
                                 command=lambda: self._handle_complete_action("next", win_screen))
-        next_button.pack(side="left", padx=10)
+        next_button.pack(side="left", padx=int(10 * self.scale)) # Escalado de padding
 
         menu_button = tk.Button(button_frame, text="Volver al Menú",
-                                font=("Arial", 12, "bold"),
+                                font=self.small_button_font, # Usar small_button_font para consistencia
                                 bg="#5B84B1", fg="white", 
                                 activebackground="#4A6E94",
-                                relief="flat", bd=0, padx=15, pady=8,
+                                relief="flat", bd=0, padx=int(15 * self.scale), pady=int(8 * self.scale), # Escalado de padding
                                 command=lambda: self._handle_complete_action("menu", win_screen))
-        menu_button.pack(side="left", padx=10)
+        menu_button.pack(side="left", padx=int(10 * self.scale)) # Escalado de padding
 
         win_screen.update_idletasks()
         x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (win_screen.winfo_width() // 2)
@@ -421,11 +481,15 @@ class SilabasGame:
         try:
             current_script_dir = os.path.dirname(__file__)
             print(f"DEBUG: current_script_dir = {current_script_dir}") 
+            # current_script_dir ahora es 'simon dice/nivel1'
 
-            simon_dice_dir = os.path.dirname(current_script_dir)
-            print(f"DEBUG: simon_dice_dir = {simon_dice_dir}") 
+            # Para llegar a 'simon dice', necesitamos el directorio padre de 'nivel1'
+            simon_dice_root_dir = os.path.dirname(current_script_dir)
+            print(f"DEBUG: simon_dice_root_dir = {simon_dice_root_dir}") 
+            # simon_dice_root_dir ahora es 'simon dice'
 
-            menu_simondice_path = os.path.join(simon_dice_dir, "menu", "menu_simondice.py")
+            # Ahora, desde 'simon dice', podemos ir a la carpeta 'menu'
+            menu_simondice_path = os.path.join(simon_dice_root_dir, "menu", "menu_simondice.py")
             print(f"DEBUG: menu_simondice_path construida = {menu_simondice_path}") 
 
             if not os.path.exists(menu_simondice_path):

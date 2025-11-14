@@ -47,8 +47,16 @@ class PuzzleGame:
     def __init__(self, master):
         self.master = master
         master.title("Rompecabezas Nivel 3") # Título actualizado
-        master.geometry("1000x750")
-        master.resizable(False, False)
+        screen_width = master.winfo_screenwidth()
+        screen_height = master.winfo_screenheight()
+        base_width = 1000
+        base_height = 750
+        self.scale = min(screen_width / base_width, screen_height / base_height)
+
+        master.attributes("-fullscreen", True)
+        master.configure(bg=GameConfig.BG_COLOR_MAIN)
+
+        self._apply_scaling()
         master.configure(bg=GameConfig.BG_COLOR_MAIN)
 
         self.piece_images = []
@@ -72,6 +80,24 @@ class PuzzleGame:
 
         self._create_gui()
         self._start_new_round()
+ 
+    def _apply_scaling(self):
+        scale = self.scale
+
+        # Escalar tamaños
+        GameConfig.PIECE_SIZE = int(80 * scale)
+        GameConfig.CARD_WIDTH = int(900 * scale)
+        GameConfig.CARD_HEIGHT = int(650 * scale)
+        GameConfig.SIDE_PIECE_PADDING_X = int(10 * scale)
+        GameConfig.SIDE_PIECE_SPACING_Y = int(5 * scale)
+
+        # Escalar fuentes
+        self.font_title = ("Segoe UI", int(24 * scale), "bold")
+        self.font_name = ("Segoe UI", int(26 * scale), "bold")
+        self.font_button = ("Segoe UI", int(16 * scale), "bold")
+        self.font_win_title = ("Segoe UI", int(24 * scale), "bold")
+        self.font_win_msg = ("Segoe UI", int(14 * scale))
+        self.font_win_button = ("Segoe UI", int(12 * scale), "bold")    
 
     def _start_new_round(self):
         if not GameConfig.IMAGE_FILENAMES:
@@ -177,7 +203,7 @@ class PuzzleGame:
         self.content_frame.grid_columnconfigure(0, weight=1) 
 
         self.level_title_label = tk.Label(self.content_frame, text="Rompecabezas Nivel 3", # Título del Nivel 3
-                                          font=("Segoe UI", 24, "bold"),
+                                          font=self.font_title,
                                           bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
         self.level_title_label.grid(row=0, column=0, pady=(25, 10)) 
 
@@ -188,7 +214,7 @@ class PuzzleGame:
                               bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.SOUND_ICON_COLOR)
         sound_icon.pack(side="left", padx=7)
 
-        self.object_name_label = tk.Label(header_frame_object, text="Objeto", font=("Segoe UI", 26, "bold"),
+        self.object_name_label = tk.Label(header_frame_object, text="Objeto", font=self.font_name,
                                            bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
         self.object_name_label.pack(side="left")
 
@@ -231,7 +257,7 @@ class PuzzleGame:
         buttons_frame.grid(row=3, column=0, pady=(20, 25)) 
 
         self.back_to_menu_button = tk.Button(buttons_frame, text="Volver al Menú",
-                                             font=("Segoe UI", 16, "bold"),
+                                             font=self.font_button,
                                              bg=GameConfig.BUTTON_BG_COLOR, fg=GameConfig.BUTTON_TEXT_COLOR,
                                              activebackground=GameConfig.BUTTON_ACTIVE_BG_COLOR,
                                              relief="flat", bd=0, padx=20, pady=10,
@@ -442,7 +468,9 @@ class PuzzleGame:
     def _show_win_screen(self):
         win_screen = tk.Toplevel(self.master)
         win_screen.title("¡Ganaste!")
-        win_screen.geometry("400x250") 
+        win_width = int(400 * self.scale)
+        win_height = int(250 * self.scale)
+        win_screen.geometry(f"{win_width}x{win_height}")
         win_screen.resizable(False, False)
         win_screen.attributes("-topmost", True) 
         win_screen.grab_set() 
@@ -458,7 +486,7 @@ class PuzzleGame:
         message_label.pack(pady=(10, 5))
 
         sub_message_label = tk.Label(frame, text="¡Completaste el rompecabezas! 🎉",
-                                      font=("Segoe UI", 14),
+                                      font=self.font_win_msg,
                                       bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
         sub_message_label.pack(pady=(0, 20))
 
@@ -466,7 +494,7 @@ class PuzzleGame:
         button_frame.pack(pady=10)
 
         next_button = tk.Button(button_frame, text="Siguiente Imagen",
-                                font=("Segoe UI", 12, "bold"),
+                                font=self.font_win_button,
                                 bg=GameConfig.BUTTON_BG_COLOR, fg=GameConfig.BUTTON_TEXT_COLOR,
                                 activebackground=GameConfig.BUTTON_ACTIVE_BG_COLOR,
                                 relief="flat", bd=0, padx=15, pady=8,

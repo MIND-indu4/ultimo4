@@ -40,8 +40,17 @@ class PuzzleGame:
     def __init__(self, master):
         self.master = master
         master.title("Rompecabezas Nivel 2")
-        master.geometry("1000x750")
-        master.resizable(False, False)
+        screen_width = master.winfo_screenwidth()
+        screen_height = master.winfo_screenheight()
+        base_width = 1000
+        base_height = 750
+        self.scale = min(screen_width / base_width, screen_height / base_height)
+
+        master.attributes("-fullscreen", True)
+        master.configure(bg=GameConfig.BG_COLOR_MAIN)
+
+        # ✅ Aplicar escala
+        self._apply_scaling()
         master.configure(bg=GameConfig.BG_COLOR_MAIN)
 
         self.piece_images = []
@@ -65,6 +74,24 @@ class PuzzleGame:
 
         self._create_gui()
         self._start_new_round()
+
+    def _apply_scaling(self):
+        scale = self.scale
+
+        # Escalar tamaños
+        GameConfig.PIECE_SIZE = int(120 * scale)
+        GameConfig.CARD_WIDTH = int(900 * scale)
+        GameConfig.CARD_HEIGHT = int(650 * scale)
+        GameConfig.SIDE_PIECE_PADDING_X = int(10 * scale)
+        GameConfig.SIDE_PIECE_SPACING_Y = int(5 * scale)
+
+        # Escalar fuentes
+        self.font_title = ("Segoe UI", int(24 * scale), "bold")
+        self.font_name = ("Segoe UI", int(26 * scale), "bold")
+        self.font_button = ("Segoe UI", int(16 * scale), "bold")
+        self.font_win_title = ("Segoe UI", int(24 * scale), "bold")
+        self.font_win_msg = ("Segoe UI", int(14 * scale))
+        self.font_win_button = ("Segoe UI", int(12 * scale), "bold")
 
     def _start_new_round(self):
         if not GameConfig.IMAGE_FILENAMES:
@@ -434,7 +461,9 @@ class PuzzleGame:
     def _show_win_screen(self):
         win_screen = tk.Toplevel(self.master)
         win_screen.title("¡Ganaste!")
-        win_screen.geometry("400x250") 
+        win_width = int(400 * self.scale)
+        win_height = int(250 * self.scale)
+        win_screen.geometry(f"{win_width}x{win_height}")
         win_screen.resizable(False, False)
         win_screen.attributes("-topmost", True) 
         win_screen.grab_set() 

@@ -4,13 +4,15 @@ from PIL import Image, ImageTk, ImageDraw, ImageFont
 import random
 import os
 import sys
-import subprocess # Importar el módulo subprocess
+import subprocess 
+import socket
+import threading
+import time
 
-# ---------- Configuración del Juego (más centralizada y flexible) ----------
 class GameConfig:
-    PIECE_SIZE = 150          # Tamaño de cada ficha (cuadrada)
-    ROWS = 2 # Nivel 1: 2x2
-    COLS = 2 # Nivel 1: 2x2
+    PIECE_SIZE = 150    # Tamaño de cada ficha (cuadrada)
+    ROWS = 2            # Nivel 1: 2x2
+    COLS = 2            # Nivel 1: 2x2
 
     IMAGE_FILENAMES = ["aceite.png", "asustar.png","batidora.png","batir.png","calabaza.png","cepillar los dientes.png","cumpleaños.png","dormir.png","dormitorio.png","estoy bien.png",]
 
@@ -36,15 +38,25 @@ class GameConfig:
     CARD_WIDTH = 900
     CARD_HEIGHT = 650
 
-# -----------------------------------
+
 
 class PuzzleGame:
     def __init__(self, master):
         self.master = master
-        master.title("Rompecabezas Nivel 1") # Título actualizado
-        master.geometry("1000x750")
-        master.resizable(False, False)
+        master.title("Rompecabezas Nivel 1")
+
+        # ✅ Pantalla completa y escala
+        screen_width = master.winfo_screenwidth()
+        screen_height = master.winfo_screenheight()
+        base_width = 1000
+        base_height = 750
+        self.scale = min(screen_width / base_width, screen_height / base_height)
+
+        master.attributes("-fullscreen", True)
         master.configure(bg=GameConfig.BG_COLOR_MAIN)
+
+        # ✅ Aplicar escala a todos los tamaños
+        self._apply_scaling()
 
         self.piece_images = []
         self.side_piece_labels = []
@@ -67,6 +79,21 @@ class PuzzleGame:
 
         self._create_gui()
         self._start_new_round()
+    
+    def _apply_scaling(self):
+        scale = self.scale
+
+        # Escalar tamaños base
+        GameConfig.PIECE_SIZE = int(150 * scale)
+        GameConfig.CARD_WIDTH = int(900 * scale)
+        GameConfig.CARD_HEIGHT = int(650 * scale)
+        GameConfig.SIDE_PIECE_PADDING_X = int(15 * scale)
+        GameConfig.SIDE_PIECE_SPACING_Y = int(15 * scale)
+
+        # Escalar fuentes
+        self.font_title = ("Segoe UI", int(24 * scale), "bold")
+        self.font_name = ("Segoe UI", int(26 * scale), "bold")
+        self.font_button = ("Segoe UI", int(16 * scale), "bold")
 
     def _start_new_round(self):
         if not GameConfig.IMAGE_FILENAMES:
@@ -143,7 +170,7 @@ class PuzzleGame:
         print(f"Total de {len(self.piece_images)} piezas de imagen creadas.")
 
     def _create_gui(self):
-        total_pieces = GameConfig.ROWS * GameConfig.COLS # 4 piezas para 2x2
+        total_pieces = GameConfig.ROWS * GameConfig.COLS 
         max_pieces_on_one_side = (total_pieces + 1) // 2 # 2 piezas para cada lado si se distribuyen
 
         side_canvas_width = GameConfig.PIECE_SIZE + 2 * GameConfig.SIDE_PIECE_PADDING_X
@@ -179,7 +206,7 @@ class PuzzleGame:
                                         height=card_height - (2 * rounded_rect_padding))
 
         self.level_title_label = tk.Label(self.content_frame, text="Rompecabezas Nivel 1", # Título del nivel 1
-                                          font=("Segoe UI", 24, "bold"),
+                                          font=self.font_title,
                                           bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
         self.level_title_label.pack(pady=(25, 10))
 
@@ -190,7 +217,7 @@ class PuzzleGame:
                               bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.SOUND_ICON_COLOR)
         sound_icon.pack(side="left", padx=7)
 
-        self.object_name_label = tk.Label(header_frame_object, text="Objeto", font=("Segoe UI", 26, "bold"),
+        self.object_name_label = tk.Label(header_frame_object, text="Objeto", font=self.font_name,
                                            bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
         self.object_name_label.pack(side="left")
 
@@ -223,7 +250,7 @@ class PuzzleGame:
         buttons_frame.pack(pady=(20, 25))
 
         self.back_to_menu_button = tk.Button(buttons_frame, text="Volver al Menú",
-                                             font=("Segoe UI", 16, "bold"),
+                                             font=self.font_button,
                                              bg=GameConfig.BUTTON_BG_COLOR, fg=GameConfig.BUTTON_TEXT_COLOR,
                                              activebackground=GameConfig.BUTTON_ACTIVE_BG_COLOR,
                                              relief="flat", bd=0, padx=20, pady=10,
@@ -273,7 +300,7 @@ class PuzzleGame:
         self.piece_current_slot = {}
         self.piece_initial_position = {}
 
-        total_pieces = GameConfig.ROWS * GameConfig.COLS # Esto será 4 para Nivel 1
+        total_pieces = GameConfig.ROWS * GameConfig.COLS 
 
         # Distribuimos las 4 piezas entre los dos canvases laterales (2 en cada uno)
         pieces_on_left_canvas = total_pieces // 2 # 2 piezas
@@ -457,18 +484,15 @@ class PuzzleGame:
                 break
 
         if all_correct:
-            # --- MODIFICADO: Llama a la nueva pantalla de victoria ---
             self._show_win_screen()
-            # Asegura que el botón "Siguiente Imagen" siempre muestre el texto correcto
             self.next_image_button.config(text="Siguiente Imagen")
 
-    # --- INICIO DE LAS NUEVAS FUNCIONES PARA LA PANTALLA DE VICTORIA ---
     def _show_win_screen(self):
         win_screen = tk.Toplevel(self.master)
         win_screen.title("¡Ganaste!")
         win_screen.geometry("400x250") # Tamaño de la ventana de felicitación
         win_screen.resizable(False, False)
-        win_screen.attributes("-topmost", True) # Asegura que la ventana esté siempre al frente
+        win_screen.attributes("-topmost", True) 
         win_screen.grab_set() # Bloquea la interacción con la ventana principal
 
         # Manejar el cierre con la X para liberar el grab_set
@@ -479,7 +503,7 @@ class PuzzleGame:
 
         # Mensaje de felicitación
         message_label = tk.Label(frame, text="¡Felicidades!",
-                                 font=("Segoe UI", 24, "bold"),
+                                 font=self.font_title,
                                  bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
         message_label.pack(pady=(10, 5))
 
@@ -518,19 +542,15 @@ class PuzzleGame:
 
     def _handle_win_action(self, action, win_screen):
         win_screen.destroy() # Cierra la ventana de felicitación
-        self.master.grab_release() # Libera el bloqueo de la ventana principal
+        self.master.grab_release() 
         if action == "next":
             self._start_new_round() # Inicia una nueva ronda
         elif action == "menu":
             self._back_to_menu() # Vuelve al menú principal
 
     def _on_win_screen_close(self, win_screen):
-        # Cuando el usuario cierra la ventana de victoria con la 'X', simplemente la destruimos
-        # y liberamos la ventana principal para que pueda seguir interactuando.
         win_screen.destroy()
         self.master.grab_release()
-    # --- FIN DE LAS NUEVAS FUNCIONES PARA LA PANTALLA DE VICTORIA ---
-
 
     def _back_to_menu(self):
         self.master.destroy()
@@ -548,7 +568,6 @@ class PuzzleGame:
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo iniciar el menú: {e}. Revisa la consola para más detalles.", parent=self.master)
 
-# -------------- Iniciar el Juego --------------
 if __name__ == "__main__":
     import sys
     root = tk.Tk()

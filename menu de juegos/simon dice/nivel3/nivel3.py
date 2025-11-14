@@ -13,8 +13,20 @@ class FrasesGame:
     def __init__(self, master):
         self.master = master
         master.title("Simón Dice: Las Frases")
-        master.geometry("1000x700")
+        
+        # --- MODIFICACIONES PARA PANTALLA COMPLETA ---
+        # 1. Eliminar master.geometry para que no fije un tamaño.
+        # master.geometry("1000x700") 
+        master.attributes("-fullscreen", True) # Pone la ventana en pantalla completa
+        
+        # 2. Capturar la resolución de la pantalla para ajustar el canvas principal
+        self.screen_width = master.winfo_screenwidth()
+        self.screen_height = master.winfo_screenheight()
         master.configure(bg="#FF5757")
+
+        # 3. Vincular la tecla Escape para salir de pantalla completa
+        master.bind("<Escape>", self.exit_fullscreen)
+        # --- FIN MODIFICACIONES ---
 
         self.all_phrases_data = [
             {
@@ -136,9 +148,15 @@ class FrasesGame:
 
         self.game_state = "individual_word" # Este estado se mantiene, pero la lógica de felicitación es distinta
 
+        # Redimensiona el canvas principal para que ocupe una porción de la pantalla completa
+        # Puedes ajustar estos valores (0.8, 0.7) para que se vea bien en tu resolución.
+        # Aquí se usa un 90% del ancho y 85% del alto de la pantalla para el canvas.
+        canvas_width = int(self.screen_width * 0.9)
+        canvas_height = int(self.screen_height * 0.85)
+
         self.canvas = tk.Canvas(master, bg="#FF5757", highlightthickness=0)
-        self.canvas.place(relx=0.5, rely=0.5, anchor="center", width=900, height=600)
-        self.draw_rounded_rect(self.canvas, 0, 0, 900, 600, radius=20, fill="white", outline="white")
+        self.canvas.place(relx=0.5, rely=0.5, anchor="center", width=canvas_width, height=canvas_height)
+        self.draw_rounded_rect(self.canvas, 0, 0, canvas_width, canvas_height, radius=20, fill="white", outline="white")
         self.inner_frame = tk.Frame(self.canvas, bg="white")
         self.inner_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
 
@@ -246,6 +264,11 @@ class FrasesGame:
 
         self.update_display()
 
+    # --- NUEVA FUNCIÓN PARA SALIR DE PANTALLA COMPLETA ---
+    def exit_fullscreen(self, event=None):
+        self.master.attributes("-fullscreen", False)
+    # --- FIN NUEVA FUNCIÓN ---
+
     def draw_rounded_rect(self, canvas, x1, y1, x2, y2, radius, **kwargs):
         points = [x1 + radius, y1,
                   x2 - radius, y1,
@@ -345,9 +368,23 @@ class FrasesGame:
                 return
             image_path = image_filename
             original_img_pil = Image.open(image_path)
-            desired_width = 250
-            aspect_ratio = original_img_pil.width / original_img_pil.height
-            desired_height = int(desired_width / aspect_ratio)
+            # Asegúrate de que las imágenes se redimensionen proporcionalmente
+            # para llenar el espacio disponible sin desbordar el canvas principal.
+            # Ajusta estos valores según sea necesario para tu diseño.
+            max_img_width = int(self.canvas.winfo_width() * 0.4) # Por ejemplo, 40% del ancho del canvas
+            max_img_height = int(self.canvas.winfo_height() * 0.4) # Por ejemplo, 40% del alto del canvas
+
+            original_width, original_height = original_img_pil.size
+            
+            # Calcular las nuevas dimensiones manteniendo el aspecto
+            if original_width > max_img_width or original_height > max_img_height:
+                ratio = min(max_img_width / original_width, max_img_height / original_height)
+                desired_width = int(original_width * ratio)
+                desired_height = int(original_height * ratio)
+            else:
+                desired_width = original_width
+                desired_height = original_height
+
 
             img_pil_resized = original_img_pil.resize((desired_width, desired_height), Image.Resampling.LANCZOS)
             self.single_word_image_tk = ImageTk.PhotoImage(img_pil_resized)
