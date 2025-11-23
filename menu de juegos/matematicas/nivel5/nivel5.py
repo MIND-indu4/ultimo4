@@ -1,0 +1,383 @@
+import tkinter as tk
+from tkinter import messagebox
+from PIL import Image, ImageTk, ImageDraw, ImageFont
+import random
+import os
+import sys
+import subprocess
+
+# --- CONFIGURACIÓN ---
+class GameConfig:
+    MAIN_COLOR = "#4CAF50"       # Verde vibrante (Estilo Nivel 1 y 2)
+    TEXT_DARK = "#212121"
+    CARD_COLOR = "white"
+    
+    # Imágenes (Verduras y Frutas)
+    IMAGENES = [
+        "manzana.png", 
+        "pera.jpg", 
+        "banana.png", 
+        "frutilla.png", 
+        "naranja.png",
+        "limon.png",
+        "piña.png",
+        "sandia.png",
+        "papa.png", 
+        "zanahoria.png", 
+        "brocoli.png", 
+        "cebolla.png",
+        "tomate.png", 
+        "lechuga.png",    
+        "pepino.png",
+        "calabaza.png"
+    ]
+
+# --- FUNCIONES AUXILIARES ---
+def create_rounded_rectangle(canvas, x1, y1, x2, y2, radius, **kwargs):
+    points = [x1 + radius, y1, x2 - radius, y1, x2, y1, x2, y1 + radius,
+              x2, y2 - radius, x2, y2, x2 - radius, y2, x1 + radius, y2,
+              x1, y2, x1, y2 - radius, x1, y1 + radius, x1, y1]
+    return canvas.create_polygon(points, smooth=True, **kwargs)
+
+class MathDragGameLevel5:
+    def __init__(self, master):
+        self.master = master
+        master.title("Matemáticas - Nivel 5: Completar Suma")
+        master.attributes("-fullscreen", True)
+        master.configure(bg=GameConfig.MAIN_COLOR)
+
+        # Escala dinámica
+        screen_width = master.winfo_screenwidth()
+        screen_height = master.winfo_screenheight()
+        base_width = 1280
+        base_height = 800
+        self.scale = min(screen_width / base_width, screen_height / base_height)
+
+        # Fuentes
+        self.font_title = ("Arial", int(32 * self.scale), "bold")
+        self.font_signos = ("Arial", int(60 * self.scale), "bold") # Signos grandes
+        self.font_btn = ("Arial", int(14 * self.scale), "bold")
+        
+        # Tamaño de las cajas
+        self.box_size = int(140 * self.scale) 
+        
+        self.drag_data = {"item": None}
+
+        self._create_gui()
+        self._start_new_round()
+
+    def _create_gui(self):
+        # Canvas Principal
+        self.main_canvas = tk.Canvas(self.master, bg=GameConfig.MAIN_COLOR, highlightthickness=0)
+        self.main_canvas.pack(fill="both", expand=True)
+
+        sw = self.master.winfo_screenwidth()
+        sh = self.master.winfo_screenheight()
+        cw = int(sw * 0.85)
+        ch = int(sh * 0.85)
+        cx = sw // 2
+        cy = sh // 2
+        
+        self.ancho_real_frame = cw - 40 
+
+        # Tarjeta Blanca
+        create_rounded_rectangle(self.main_canvas, cx - cw//2, cy - ch//2, cx + cw//2, cy + ch//2, radius=40, fill=GameConfig.CARD_COLOR)
+
+        # Frame contenido
+        self.content_frame = tk.Frame(self.main_canvas, bg=GameConfig.CARD_COLOR)
+        self.content_frame.place(x=cx - cw//2 + 20, y=cy - ch//2 + 20, width=self.ancho_real_frame, height=ch-40)
+
+        # Botón Menú
+        self.btn_menu = tk.Label(self.content_frame, text="Menú", font=self.font_btn, 
+                                   bg=GameConfig.MAIN_COLOR, fg="white", padx=15, pady=8, cursor="hand2")
+        self.btn_menu.place(x=10, y=10)
+        self.btn_menu.bind("<Button-1>", self.volver_al_menu)
+        
+        # Título
+        tk.Label(self.content_frame, text="¡COMPLÉTALO!", font=self.font_title, 
+                 bg=GameConfig.CARD_COLOR, fg=GameConfig.MAIN_COLOR).pack(pady=(20, 40))
+
+        # --- ÁREA DE ECUACIÓN (Arriba) ---
+        # Estructura: [Caja] + [TARGET] = [Caja]
+        self.frame_ecuacion = tk.Frame(self.content_frame, bg=GameConfig.CARD_COLOR)
+        self.frame_ecuacion.pack(pady=20)
+
+        # 1. Parte Conocida
+        self.lbl_parte1 = tk.Label(self.frame_ecuacion, bg="white", bd=2, relief="solid")
+        self.lbl_parte1.grid(row=0, column=0, padx=20)
+        
+        # Signo +
+        tk.Label(self.frame_ecuacion, text="+", font=self.font_signos, bg=GameConfig.CARD_COLOR, fg="black").grid(row=0, column=1)
+        
+        # 2. TARGET (La incógnita)
+        # Aquí es donde el niño debe soltar la imagen
+        self.lbl_target = tk.Label(self.frame_ecuacion, bg="#EEEEEE", bd=2, relief="solid")
+        self.lbl_target.grid(row=0, column=2, padx=20)
+        
+        # Signo =
+        tk.Label(self.frame_ecuacion, text="=", font=self.font_signos, bg=GameConfig.CARD_COLOR, fg="black").grid(row=0, column=3)
+        
+        # 3. Resultado Total
+        self.lbl_total = tk.Label(self.frame_ecuacion, bg="white", bd=2, relief="solid")
+        self.lbl_total.grid(row=0, column=4, padx=20)
+
+    def _start_new_round(self):
+        # Limpiar fichas anteriores
+        for widget in self.content_frame.winfo_children():
+            if hasattr(widget, "es_opcion_juego"):
+                widget.destroy()
+
+        # Reiniciar Target
+        self.img_slot_vacio = self.crear_imagen_slot_vacio()
+        self.lbl_target.config(image=self.img_slot_vacio)
+        self.lbl_target.image = self.img_slot_vacio
+        self.lbl_target.ocupado = False
+
+        # 1. Lógica Matemática
+        self.item_type = random.choice(GameConfig.IMAGENES)
+        
+        # Generar números (Total hasta 9)
+        self.total_num = random.randint(2, 9)
+        # El primer número debe ser menor al total
+        self.num1 = random.randint(1, self.total_num - 1)
+        # Lo que falta (la respuesta correcta)
+        self.missing_num = self.total_num - self.num1
+
+        # 2. Actualizar Pantalla
+        img1 = self.crear_imagen_verdura(self.item_type, self.num1)
+        self.lbl_parte1.config(image=img1)
+        self.lbl_parte1.image = img1
+
+        img_total = self.crear_imagen_verdura(self.item_type, self.total_num)
+        self.lbl_total.config(image=img_total)
+        self.lbl_total.image = img_total
+
+        # 3. Generar Opciones (Fichas de imágenes abajo)
+        opciones = []
+        
+        # Opción Correcta
+        opciones.append({"cant": self.missing_num, "tipo": self.item_type, "correcta": True})
+        
+        # Distractores (Necesitamos 4 más para tener 5 opciones como en la foto)
+        while len(opciones) < 5:
+            # Distractor puede ser: Cantidad incorrecta O Tipo incorrecto
+            es_tipo_correcto = random.choice([True, False])
+            
+            if es_tipo_correcto:
+                cant = random.randint(1, 9)
+                tipo = self.item_type
+            else:
+                cant = random.randint(1, 9)
+                tipo = random.choice(GameConfig.IMAGENES)
+                if tipo == self.item_type: tipo = "banana.png" # Fallback forzado
+            
+            # Evitar duplicados exactos de la correcta
+            if cant == self.missing_num and tipo == self.item_type:
+                continue
+                
+            opciones.append({"cant": cant, "tipo": tipo, "correcta": False})
+        
+        random.shuffle(opciones)
+
+        # 4. Dibujar Fichas Abajo
+        frame_w = self.ancho_real_frame 
+        y_pos = self.content_frame.winfo_height() - int(180 * self.scale)
+        if y_pos < 0: y_pos = int(self.master.winfo_screenheight() * 0.85) - int(200 * self.scale)
+
+        zona_width = frame_w // 5 # Dividir en 5 zonas
+        
+        for i, op in enumerate(opciones):
+            img_op = self.crear_imagen_verdura(op["tipo"], op["cant"], es_opcion=True)
+            
+            lbl = tk.Label(self.content_frame, image=img_op, bg="white", bd=1, relief="raised", cursor="hand2")
+            lbl.image = img_op 
+            lbl.es_correcta = op["correcta"]
+            lbl.es_opcion_juego = True
+            
+            # Centrar
+            x_pos = (i * zona_width) + (zona_width // 2) - (self.box_size // 2)
+            
+            lbl.place(x=x_pos, y=y_pos)
+            lbl.home_x = x_pos
+            lbl.home_y = y_pos
+            lbl.bloqueado = False 
+
+            lbl.bind("<Button-1>", self.start_drag)
+            lbl.bind("<B1-Motion>", self.do_drag)
+            lbl.bind("<ButtonRelease-1>", self.end_drag)
+
+    # --- LÓGICA ARRASTRE ---
+    def start_drag(self, event):
+        widget = event.widget
+        if widget.bloqueado: return
+        widget.lift()
+        self.drag_data["item"] = widget
+
+    def do_drag(self, event):
+        widget = self.drag_data["item"]
+        if not widget: return
+        
+        mx = self.content_frame.winfo_pointerx() - self.content_frame.winfo_rootx()
+        my = self.content_frame.winfo_pointery() - self.content_frame.winfo_rooty()
+        
+        widget.place(x=mx - (widget.winfo_width()//2), y=my - (widget.winfo_height()//2))
+
+    def end_drag(self, event):
+        widget = self.drag_data["item"]
+        self.drag_data["item"] = None
+        if not widget: return
+
+        drop_x = widget.winfo_rootx() + (widget.winfo_width() // 2)
+        drop_y = widget.winfo_rooty() + (widget.winfo_height() // 2)
+
+        # Verificar colisión con el TARGET central
+        tx1 = self.lbl_target.winfo_rootx()
+        ty1 = self.lbl_target.winfo_rooty()
+        tx2 = tx1 + self.lbl_target.winfo_width()
+        ty2 = ty1 + self.lbl_target.winfo_height()
+
+        if tx1 < drop_x < tx2 and ty1 < drop_y < ty2:
+            if widget.es_correcta:
+                # Posicionar
+                final_x = tx1 - self.content_frame.winfo_rootx()
+                final_y = ty1 - self.content_frame.winfo_rooty()
+                
+                # Centrar
+                ox = (self.lbl_target.winfo_width() - widget.winfo_width()) // 2
+                oy = (self.lbl_target.winfo_height() - widget.winfo_height()) // 2
+                
+                widget.place(x=final_x + ox, y=final_y + oy)
+                widget.bloqueado = True
+                
+                self.master.after(300, self.game_win)
+            else:
+                self.return_to_home(widget)
+        else:
+            self.return_to_home(widget)
+
+    def return_to_home(self, widget):
+        widget.place(x=widget.home_x, y=widget.home_y)
+
+    def game_win(self):
+        win = tk.Toplevel(self.master)
+        win.title("¡Ganaste!")
+        w, h = 400, 280
+        cx = self.master.winfo_screenwidth() // 2
+        cy = self.master.winfo_screenheight() // 2
+        win.geometry(f"{w}x{h}+{cx-w//2}+{cy-h//2}")
+        win.configure(bg="white")
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+
+        tk.Frame(win, bg=GameConfig.MAIN_COLOR, height=15).pack(fill="x")
+        tk.Label(win, text="¡Excelente!", font=("Arial", 26, "bold"), bg="white", fg=GameConfig.MAIN_COLOR).pack(pady=(30, 10))
+        tk.Label(win, text="¡Completaste la suma!", font=("Arial", 14), bg="white", fg="#555").pack(pady=10)
+        
+        btn = tk.Label(win, text="Siguiente Ejercicio", font=("Arial", 14, "bold"),
+                       bg=GameConfig.MAIN_COLOR, fg="white", padx=20, pady=10, cursor="hand2")
+        btn.pack(pady=20)
+        btn.bind("<Button-1>", lambda e: [win.destroy(), self._start_new_round()])
+
+    # --- GENERADORES DE IMÁGENES ---
+    def crear_imagen_verdura(self, nombre_archivo, cantidad, es_opcion=False):
+        """Genera imagen de grupo de verduras (Reutilizando lógica robusta de Nivel 2)"""
+        s = self.box_size
+        canvas_img = Image.new("RGB", (s, s), "white")
+        draw = ImageDraw.Draw(canvas_img)
+        
+        # Borde de color según si es opción o parte de la ecuación
+        color_borde = GameConfig.MAIN_COLOR if es_opcion else GameConfig.TEXT_DARK
+        # Si es opción (ficha de abajo), un poco más grueso y colorido
+        w_borde = 3 if es_opcion else 2
+        # Si la opción NO es la del tipo correcto (distractor visual), borde dorado/marrón como en la foto
+        if es_opcion and "papa" not in nombre_archivo: 
+            # Nota: En tu foto, las papas tienen borde marrón, las fresas rojo, limones amarillo.
+            # Para simplificar, usamos colores genéricos o el verde principal.
+            # Usaremos un color dorado/marrón genérico para las opciones para que parezcan fichas
+            color_borde = "#C19A6B" # Marrón claro / Dorado
+
+        draw.rectangle([0, 0, s-1, s-1], outline=color_borde, width=w_borde)
+
+        item_img = None
+        # Búsqueda de archivos
+        base = os.path.splitext(nombre_archivo)[0]
+        exts = [".png", ".jpg", ".jpeg"]
+        rutas = []
+        for ext in exts:
+            f = base + ext
+            rutas.append(f)
+            rutas.append(os.path.join("imagenes", f))
+            rutas.append(os.path.join("assets", f))
+            rutas.append(os.path.join("..", "nivel1", f)) # Buscar en niveles anteriores
+            rutas.append(os.path.join("..", "nivel2", f))
+
+        for r in rutas:
+            if os.path.exists(r):
+                try:
+                    item_img = Image.open(r).convert("RGBA")
+                    break
+                except: pass
+
+        # Grilla 2x2 o 3x3
+        if cantidad <= 4:
+            cols = 2
+            rows = 2
+        else:
+            cols = 3
+            rows = 3
+        
+        cell_w = s // cols
+        cell_h = s // rows 
+
+        for i in range(cantidad):
+            r = i // cols
+            c = i % cols
+            pad = 5
+            x = c * cell_w + pad
+            y = r * cell_h + pad
+            tw = cell_w - (pad*2)
+            th = cell_h - (pad*2)
+
+            if item_img:
+                aspect = item_img.width / item_img.height
+                if tw / th > aspect:
+                    new_h = th
+                    new_w = int(th * aspect)
+                else:
+                    new_w = tw
+                    new_h = int(tw / aspect)
+                
+                img_res = item_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                off_x = (tw - new_w)//2
+                off_y = (th - new_h)//2
+                canvas_img.paste(img_res, (x+off_x, y+off_y), img_res)
+            else:
+                # Fallback Círculo perfecto
+                diam = min(tw, th)
+                off_x = (tw - diam) // 2
+                off_y = (th - diam) // 2
+                draw.ellipse([x+off_x, y+off_y, x+off_x+diam, y+off_y+diam], 
+                             fill=GameConfig.MAIN_COLOR, outline="black")
+
+        return ImageTk.PhotoImage(canvas_img)
+
+    def crear_imagen_slot_vacio(self):
+        s = self.box_size
+        img = Image.new("RGB", (s, s), "white") 
+        # Podríamos no dibujar nada para que sea blanco puro, 
+        # pero dibujaremos un borde sutil para saber que ahí va algo
+        return ImageTk.PhotoImage(img)
+
+    def volver_al_menu(self, event=None):
+        ruta_actual = os.path.dirname(os.path.abspath(__file__))
+        ruta_menu = os.path.join(ruta_actual, "..", "menu", "menumatematicas.py")
+        if os.path.exists(ruta_menu):
+            self.master.destroy()
+            subprocess.Popen([sys.executable, ruta_menu])
+        else:
+            messagebox.showerror("Error", f"No se encontró el menú: {ruta_menu}")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    game = MathDragGameLevel5(root)
+    root.mainloop()
