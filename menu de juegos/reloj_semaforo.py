@@ -66,11 +66,18 @@ class SemaphoreClock:
         self.root = root
         self.root.title("Reloj Semáforo Fullscreen")
 
-        # --- PANTALLA COMPLETA ---
+        # --- CORRECCIÓN PANTALLA COMPLETA ---
+        self.root.update_idletasks()  # Importante para que Linux calcule bien
+        
         if SYSTEM_OS == "Windows":
             self.root.attributes('-fullscreen', True)
         else:
-            self.root.attributes('-fullscreen', True)
+            # Lógica para Raspberry Pi / Linux
+            w = self.root.winfo_screenwidth()
+            h = self.root.winfo_screenheight()
+            self.root.geometry(f"{w}x{h}+0+0")
+            # Esperamos 100ms para aplicar fullscreen
+            self.root.after(100, lambda: self.root.attributes('-fullscreen', True))
             
         self.root.configure(bg='white')
         self.root.bind('<Escape>', lambda e: self.exit_app())
@@ -141,12 +148,12 @@ class SemaphoreClock:
         main_frame.pack(fill='both', expand=True)
 
         # --- RELOJ ANALÓGICO ---
+        # Ajustamos el tamaño del canvas para que entre bien en pantallas chicas también
         self.clock_canvas = tk.Canvas(main_frame, width=600, height=600, bg=self.root['bg'], highlightthickness=0)
         self.clock_canvas.place(relx=0.5, rely=0.35, anchor='center')
         self.draw_clock_background()
 
         # --- DISPLAY DIGITAL ---
-        # Usamos fuente monospace compatible con Linux/RPi
         self.time_label = tk.Label(main_frame, text="00:00", font=(DIGITAL_FONT, 70, 'bold'), bg=self.root['bg'], fg='#00AA00')
         self.time_label.place(relx=0.5, rely=0.70, anchor='center')
 
@@ -374,10 +381,10 @@ class SemaphoreClock:
             
             self.root.destroy()
             
-            # Búsqueda robusta del menú
+            # Búsqueda robusta del menú (en carpeta actual o arriba)
             path = os.path.join(SCRIPT_DIR, "menu_de_juegos.py")
-            if not os.path.exists(path): # Si no está al lado, busca arriba (estructura de carpetas)
-                 path = os.path.join(SCRIPT_DIR, "..", "menu_de_juegos.py") # Fallback
+            if not os.path.exists(path):
+                 path = os.path.join(SCRIPT_DIR, "..", "menu_de_juegos.py")
             
             if os.path.exists(path):
                 subprocess.Popen([sys.executable, path])

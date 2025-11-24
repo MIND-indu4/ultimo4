@@ -31,11 +31,25 @@ class MathMenuApp:
         self.root = root
         self.root.title("Matemáticas - Menú")
         
+        # --- CORRECCIÓN APLICADA AQUÍ ---
+        # Actualizamos tareas pendientes para asegurar que lee bien el tamaño de pantalla
+        self.root.update_idletasks()
+        
         if SYSTEM_OS == "Windows":
             self.root.state("zoomed")
             self.root.attributes("-fullscreen", True)
         else:
-            self.root.attributes("-fullscreen", True)
+            # Para RASPBERRY PI (Linux):
+            # 1. Obtenemos ancho y alto
+            w = self.root.winfo_screenwidth()
+            h = self.root.winfo_screenheight()
+            
+            # 2. Forzamos el tamaño de la ventana inmediatamente para que no sea pequeña
+            self.root.geometry(f"{w}x{h}+0+0")
+            
+            # 3. Usamos .after() para esperar 100ms antes de activar el fullscreen.
+            # Esto da tiempo al sistema gráfico de la Raspberry a "despertar".
+            self.root.after(100, lambda: self.root.attributes("-fullscreen", True))
         
         self.root.configure(bg=Config.MAIN_BG_COLOR)
         self.root.bind("<Escape>", lambda e: self.go_back())
@@ -91,9 +105,8 @@ class MathMenuApp:
                                  radius=int(40*self.scale), fill=Config.CARD_COLOR, outline="")
 
         # --- TÍTULO ---
-        title_font_size = int(70 * self.scale) # Un poquito más grande para llenar espacio
+        title_font_size = int(70 * self.scale) 
         
-        # Título "Matemáticas" centrado un poco más abajo ya que no hay subtítulo
         self.canvas.create_text(self.screen_width // 2, card_y1 + int(100 * self.scale), 
                                 text="Matemáticas", 
                                 font=(SYSTEM_FONT, title_font_size, "bold"), 

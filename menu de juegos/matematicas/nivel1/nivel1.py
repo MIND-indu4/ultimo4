@@ -23,7 +23,8 @@ class GameConfig:
     TEXT_DARK = "#212121"
     CARD_COLOR = "white"
     
-    # Nombres de tus imágenes (Deben estar en la misma carpeta)
+    # IMPORTANTE: Asegúrate de que tus archivos se llamen EXACTAMENTE así 
+    # (respetando mayúsculas y minúsculas para que funcione en Linux)
     IMAGENES = [
         "manzana.png", "pera.png", "banana.png", 
         "frutilla.png", "naranja.png", "limon.png",
@@ -42,10 +43,19 @@ class MathDragGame:
         self.master = master
         master.title("Matemáticas - Nivel 1")
         
+        # --- CORRECCIÓN PARA RASPBERRY PI ---
+        master.update_idletasks() # Actualiza para leer bien el tamaño de pantalla
+        
         if SYSTEM_OS == "Windows":
             master.attributes("-fullscreen", True)
         else:
-            master.attributes("-fullscreen", True)
+            # En Linux forzamos el tamaño manual primero
+            w = master.winfo_screenwidth()
+            h = master.winfo_screenheight()
+            master.geometry(f"{w}x{h}+0+0")
+            
+            # Y esperamos 100ms para activar el fullscreen
+            master.after(100, lambda: master.attributes("-fullscreen", True))
             
         master.configure(bg=GameConfig.MAIN_COLOR)
         master.bind("<Escape>", self.volver_al_menu)
@@ -308,7 +318,7 @@ class MathDragGame:
                 off_y = (th - new_h)//2
                 canvas_img.paste(img_res, (x+off_x, y+off_y), img_res)
             else:
-                # Si no encuentra la imagen, dibuja círculos rojos (como en tu diseño de iconos)
+                # Si no encuentra la imagen, dibuja círculos rojos
                 draw.ellipse([x, y, x+tw, y+th], fill="red", outline="black")
 
         return ImageTk.PhotoImage(canvas_img)
