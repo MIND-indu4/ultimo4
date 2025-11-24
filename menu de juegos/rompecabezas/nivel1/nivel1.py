@@ -5,16 +5,31 @@ import random
 import os
 import sys
 import subprocess 
-import socket
-import threading
-import time
+import platform # Necesario para detectar el sistema
+
+# ========== CONFIGURACIÓN DE SISTEMA ==========
+# Detectamos dónde estamos corriendo para elegir la fuente correcta
+def get_system_font():
+    if platform.system() == "Windows":
+        return "Segoe UI"
+    else:
+        return "DejaVu Sans" # Fuente estándar en Raspberry Pi
+
+SYSTEM_FONT = get_system_font()
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # Ruta donde está este archivo
 
 class GameConfig:
-    PIECE_SIZE = 150    # Tamaño de cada ficha (cuadrada)
-    ROWS = 2            # Nivel 1: 2x2
-    COLS = 2            # Nivel 1: 2x2
+    PIECE_SIZE = 150    
+    ROWS = 2            
+    COLS = 2            
 
-    IMAGE_FILENAMES = ["aceite.png", "asustar.png","batidora.png","batir.png","calabaza.png","cepillar los dientes.png","cumpleaños.png","dormir.png","dormitorio.png","estoy bien.png",]
+    # IMPORTANTE: En Linux, estos nombres deben ser EXACTOS (mayúsculas/minúsculas)
+    # Si tu archivo es "Aceite.png" y aquí dice "aceite.png", fallará en la Raspberry.
+    IMAGE_FILENAMES = [
+        "aceite.png", "asustar.png", "batidora.png", "batir.png", 
+        "calabaza.png", "cepillar los dientes.png", "cumpleaños.png", 
+        "dormir.png", "dormitorio.png", "estoy bien.png"
+    ]
 
     CURRENT_IMAGE_FILENAME = ""
     CURRENT_IMAGE_NAME = ""
@@ -31,14 +46,12 @@ class GameConfig:
     BOARD_GRID_COLOR = "#eeeeee"
     BOARD_BORDER_COLOR = "#cccccc"
 
-    # Espaciado para las piezas laterales
+    # Espaciado 
     SIDE_PIECE_PADDING_X = 15
     SIDE_PIECE_SPACING_Y = 15
 
     CARD_WIDTH = 900
     CARD_HEIGHT = 650
-
-
 
 class PuzzleGame:
     def __init__(self, master):
@@ -54,6 +67,9 @@ class PuzzleGame:
 
         master.attributes("-fullscreen", True)
         master.configure(bg=GameConfig.BG_COLOR_MAIN)
+        
+        # Salir con Escape
+        master.bind("<Escape>", lambda e: self._back_to_menu())
 
         # ✅ Aplicar escala a todos los tamaños
         self._apply_scaling()
@@ -71,9 +87,9 @@ class PuzzleGame:
         self.content_frame = None
         self.object_name_label = None
         self.level_title_label = None
-        self.left_canvas = None # Solo un canvas izquierdo
+        self.left_canvas = None 
         self.board_canvas = None
-        self.right_canvas = None # Solo un canvas derecho
+        self.right_canvas = None 
         self.next_image_button = None
         self.back_to_menu_button = None
 
@@ -90,22 +106,21 @@ class PuzzleGame:
         GameConfig.SIDE_PIECE_PADDING_X = int(15 * scale)
         GameConfig.SIDE_PIECE_SPACING_Y = int(15 * scale)
 
-        # Escalar fuentes
-        self.font_title = ("Segoe UI", int(24 * scale), "bold")
-        self.font_name = ("Segoe UI", int(26 * scale), "bold")
-        self.font_button = ("Segoe UI", int(16 * scale), "bold")
+        # Escalar fuentes usando la fuente compatible detectada
+        self.font_title = (SYSTEM_FONT, int(24 * scale), "bold")
+        self.font_name = (SYSTEM_FONT, int(26 * scale), "bold")
+        self.font_button = (SYSTEM_FONT, int(16 * scale), "bold")
 
     def _start_new_round(self):
         if not GameConfig.IMAGE_FILENAMES:
-            messagebox.showerror("Error", "No hay imágenes configuradas para el juego.", parent=self.master)
+            messagebox.showerror("Error", "No hay imágenes configuradas.", parent=self.master)
             return
 
         GameConfig.CURRENT_IMAGE_FILENAME = random.choice(GameConfig.IMAGE_FILENAMES)
         base_name = os.path.splitext(GameConfig.CURRENT_IMAGE_FILENAME)[0]
         GameConfig.CURRENT_IMAGE_NAME = " ".join([word.capitalize() for word in base_name.split()])
 
-        print(f"Iniciando nueva ronda con la imagen: {GameConfig.CURRENT_IMAGE_FILENAME}")
-        print(f"Nombre del objeto para el título: {GameConfig.CURRENT_IMAGE_NAME}")
+        print(f"Imagen seleccionada: {GameConfig.CURRENT_IMAGE_FILENAME}")
 
         self.piece_images = []
         for lbl in self.side_piece_labels:
@@ -119,71 +134,61 @@ class PuzzleGame:
         self.next_image_button.config(text="Siguiente Imagen")
 
     def _load_and_split_image(self):
-        filename_to_load = GameConfig.CURRENT_IMAGE_FILENAME
+        # Construir ruta absoluta segura
+        filename_to_load = os.path.join(SCRIPT_DIR, GameConfig.CURRENT_IMAGE_FILENAME)
 
-        if not os.path.exists(filename_to_load):
-            print(f"ADVERTENCIA: La imagen '{filename_to_load}' no se encontró. Creando una imagen de reemplazo.")
-            img = Image.new("RGBA", (GameConfig.PIECE_SIZE * GameConfig.COLS, GameConfig.PIECE_SIZE * GameConfig.ROWS), (200, 200, 255, 255))
-            draw = ImageDraw.Draw(img)
-            try:
-                font = ImageFont.truetype("arial.ttf", 20)
-            except IOError:
-                font = ImageFont.load_default()
-            text = f"IMAGEN NO ENCONTRADA\n({filename_to_load})"
-            text_bbox = draw.textbbox((0,0), text, font=font)
-            text_width = text_bbox[2] - text_bbox[0]
-            text_height = text_bbox[3] - text_bbox[1]
-            x_pos = (img.width - text_width) / 2
-            y_pos = (img.height - text_height) / 2
-            draw.text((x_pos, y_pos), text, fill="black", font=font, align="center")
-
-        else:
+        img = None
+        
+        # Intentar cargar imagen
+        if os.path.exists(filename_to_load):
             try:
                 img = Image.open(filename_to_load).convert("RGBA")
-                print(f"Imagen '{filename_to_load}' cargada correctamente.")
             except Exception as e:
-                print(f"ERROR: No se pudo cargar la imagen '{filename_to_load}': {e}. Usando una imagen de reemplazo.")
-                img = Image.new("RGBA", (GameConfig.PIECE_SIZE * GameConfig.COLS, GameConfig.PIECE_SIZE * GameConfig.ROWS), (255, 150, 150, 255))
-                draw = ImageDraw.Draw(img)
-                try:
-                    font = ImageFont.truetype("arial.ttf", 14)
-                except IOError:
-                    font = ImageFont.load_default()
-                text = f"ERROR AL CARGAR:\n{e}"
-                text_bbox = draw.textbbox((0,0), text, font=font)
-                text_width = text_bbox[2] - text_bbox[0]
-                text_height = text_bbox[3] - text_bbox[1]
-                x_pos = (img.width - text_width) / 2
-                y_pos = (img.height - text_height) / 2
-                draw.text((x_pos, y_pos), text, fill="black", font=font, align="center")
+                print(f"ERROR cargando imagen: {e}")
+        else:
+            print(f"ERROR: No existe el archivo: {filename_to_load}")
 
+        # Si falló la carga, crear imagen de error (placeholder)
+        if img is None:
+            img = Image.new("RGBA", (GameConfig.PIECE_SIZE * GameConfig.COLS, GameConfig.PIECE_SIZE * GameConfig.ROWS), (200, 200, 255, 255))
+            draw = ImageDraw.Draw(img)
+            
+            # Fuente de respaldo para el texto de error
+            try:
+                # Intentamos cargar Arial para Windows, o default
+                font_error = ImageFont.truetype("arial.ttf", 14) if platform.system() == "Windows" else ImageFont.load_default()
+            except:
+                font_error = ImageFont.load_default()
+
+            text = f"FALTA:\n{GameConfig.CURRENT_IMAGE_FILENAME}"
+            
+            # Dibujar texto centrado (lógica simplificada)
+            draw.text((10, 10), text, fill="black", font=font_error)
+
+        # Procesar imagen (recorte cuadrado y redimensionado)
         min_dim = min(img.size)
         img = img.crop((0, 0, min_dim, min_dim))
         img = img.resize((GameConfig.PIECE_SIZE * GameConfig.COLS, GameConfig.PIECE_SIZE * GameConfig.ROWS), Image.LANCZOS)
 
+        # Cortar las piezas
         for r in range(GameConfig.ROWS):
             for c in range(GameConfig.COLS):
                 piece = img.crop((c * GameConfig.PIECE_SIZE, r * GameConfig.PIECE_SIZE,
                                   (c + 1) * GameConfig.PIECE_SIZE, (r + 1) * GameConfig.PIECE_SIZE))
                 self.piece_images.append(ImageTk.PhotoImage(piece))
 
-        print(f"Total de {len(self.piece_images)} piezas de imagen creadas.")
-
     def _create_gui(self):
         total_pieces = GameConfig.ROWS * GameConfig.COLS 
-        max_pieces_on_one_side = (total_pieces + 1) // 2 # 2 piezas para cada lado si se distribuyen
+        max_pieces_on_one_side = (total_pieces + 1) // 2 
 
         side_canvas_width = GameConfig.PIECE_SIZE + 2 * GameConfig.SIDE_PIECE_PADDING_X
         side_canvas_height = (max_pieces_on_one_side * GameConfig.PIECE_SIZE) + \
                              ((max_pieces_on_one_side + 1) * GameConfig.SIDE_PIECE_SPACING_Y)
 
-        print(f"Calculando side_canvas_width: {side_canvas_width}, side_canvas_height: {side_canvas_height}")
-
         board_width = GameConfig.PIECE_SIZE * GameConfig.COLS
         board_height = GameConfig.PIECE_SIZE * GameConfig.ROWS
 
         horizontal_padding_between_elements = 30
-        # Ajustar el cálculo del ancho de la tarjeta para solo 2 paneles laterales
         card_required_width = (side_canvas_width * 2) + board_width + (horizontal_padding_between_elements * 4) + 40
         card_required_height = max(side_canvas_height, board_height) + 150
 
@@ -205,7 +210,7 @@ class PuzzleGame:
                                         width=card_width - (2 * rounded_rect_padding),
                                         height=card_height - (2 * rounded_rect_padding))
 
-        self.level_title_label = tk.Label(self.content_frame, text="Rompecabezas Nivel 1", # Título del nivel 1
+        self.level_title_label = tk.Label(self.content_frame, text="Rompecabezas Nivel 1",
                                           font=self.font_title,
                                           bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
         self.level_title_label.pack(pady=(25, 10))
@@ -213,7 +218,8 @@ class PuzzleGame:
         header_frame_object = tk.Frame(self.content_frame, bg=GameConfig.BG_COLOR_CARD)
         header_frame_object.pack(pady=(0, 15))
 
-        sound_icon = tk.Label(header_frame_object, text="🔊", font=("Segoe UI Emoji", 26),
+        # Emoji funciona en la mayoría de sistemas modernos, pero en RPi antigua podría verse como cuadro
+        sound_icon = tk.Label(header_frame_object, text="🔊", font=("Segoe UI Emoji", 26) if platform.system()=="Windows" else (SYSTEM_FONT, 26),
                               bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.SOUND_ICON_COLOR)
         sound_icon.pack(side="left", padx=7)
 
@@ -258,13 +264,12 @@ class PuzzleGame:
         self.back_to_menu_button.pack(side="left", padx=10)
 
         self.next_image_button = tk.Button(buttons_frame, text="Siguiente Imagen",
-                                      font=("Segoe UI", 16, "bold"),
+                                      font=self.font_button,
                                       bg=GameConfig.BUTTON_BG_COLOR, fg=GameConfig.BUTTON_TEXT_COLOR,
                                       activebackground=GameConfig.BUTTON_ACTIVE_BG_COLOR,
                                       relief="flat", bd=0, padx=20, pady=10,
                                       command=self._start_new_round)
         self.next_image_button.pack(side="left", padx=10)
-        print("GUI creada.")
 
     def _draw_rounded_rectangle(self, canvas, x1, y1, x2, y2, radius, **kwargs):
         points = [x1 + radius, y1, x2 - radius, y1, x2, y1 + radius, x2, y2 - radius,
@@ -272,7 +277,6 @@ class PuzzleGame:
         canvas.create_polygon(points, smooth=True, **kwargs)
 
     def _initialize_game(self):
-        print("Inicializando juego...")
         if self.board_canvas:
             self.board_canvas.delete("all")
             for r in range(GameConfig.ROWS):
@@ -284,15 +288,12 @@ class PuzzleGame:
 
             self.shuffled_indices = list(range(GameConfig.ROWS * GameConfig.COLS))
             random.shuffle(self.shuffled_indices)
-            print(f"Índices mezclados para fichas laterales: {self.shuffled_indices}")
 
             self._create_side_pieces()
-            print("Juego inicializado.")
         else:
-            print("ERROR: board_canvas no se ha inicializado en _create_gui().")
+            print("ERROR: board_canvas no inicializado.")
 
     def _create_side_pieces(self):
-        print("Creando fichas laterales...")
         for lbl in self.side_piece_labels:
             lbl.destroy()
         self.side_piece_labels = []
@@ -301,12 +302,8 @@ class PuzzleGame:
         self.piece_initial_position = {}
 
         total_pieces = GameConfig.ROWS * GameConfig.COLS 
-
-        # Distribuimos las 4 piezas entre los dos canvases laterales (2 en cada uno)
-        pieces_on_left_canvas = total_pieces // 2 # 2 piezas
-        pieces_on_right_canvas = total_pieces - pieces_on_left_canvas # 2 piezas
-
-        # Creamos una lista de tuplas (original_idx, canvas_destino)
+        pieces_on_left_canvas = total_pieces // 2 
+        
         pieces_to_distribute = []
         for i, original_idx in enumerate(self.shuffled_indices):
             if i < pieces_on_left_canvas:
@@ -314,7 +311,6 @@ class PuzzleGame:
             else:
                 pieces_to_distribute.append((original_idx, self.right_canvas))
 
-        # Ahora colocamos las piezas en sus respectivos canvases
         left_canvas_count = 0
         right_canvas_count = 0
 
@@ -331,7 +327,7 @@ class PuzzleGame:
             if canvas_to_use == self.left_canvas:
                 y_pos = GameConfig.SIDE_PIECE_SPACING_Y + left_canvas_count * (GameConfig.PIECE_SIZE + GameConfig.SIDE_PIECE_SPACING_Y)
                 left_canvas_count += 1
-            else: # canvas_to_use == self.right_canvas
+            else: 
                 y_pos = GameConfig.SIDE_PIECE_SPACING_Y + right_canvas_count * (GameConfig.PIECE_SIZE + GameConfig.SIDE_PIECE_SPACING_Y)
                 right_canvas_count += 1
 
@@ -339,10 +335,6 @@ class PuzzleGame:
             self.side_piece_labels.append(lbl)
             self.piece_current_slot[original_idx] = None
             self.piece_initial_position[original_idx] = (x_pos, y_pos, canvas_to_use)
-            print(f"Pieza {original_idx} colocada en {canvas_to_use} en ({x_pos},{y_pos})")
-
-        print(f"Total de {len(self.side_piece_labels)} fichas laterales creadas y posicionadas.")
-
 
     def _start_drag(self, event, original_idx):
         if self.piece_current_slot[original_idx] is not None:
@@ -386,7 +378,6 @@ class PuzzleGame:
         drop_y_root = event.y_root
 
         if not self.board_canvas:
-            print("ERROR: board_canvas no está disponible para el evento de soltar.")
             self._return_piece_to_side(self.drag_data["piece_idx"])
             return
 
@@ -400,7 +391,6 @@ class PuzzleGame:
 
     def _return_piece_to_side(self, original_idx):
         if original_idx not in self.piece_initial_position:
-            print(f"Advertencia: piece_initial_position no tiene datos para original_idx {original_idx}")
             return
 
         x, y, canvas_widget = self.piece_initial_position[original_idx]
@@ -409,17 +399,14 @@ class PuzzleGame:
             original_idx_in_shuffled = self.shuffled_indices.index(original_idx)
             if original_idx_in_shuffled < len(self.side_piece_labels):
                 self.side_piece_labels[original_idx_in_shuffled].place(x=x, y=y)
-            else:
-                print(f"Advertencia: original_idx_in_shuffled {original_idx_in_shuffled} fuera de rango para side_piece_labels ({len(self.side_piece_labels)})")
         except ValueError:
-            print(f"Advertencia: original_idx {original_idx} no encontrado en shuffled_indices.")
+            pass
 
     def _try_drop(self, drop_x, drop_y):
         original_idx = self.drag_data["piece_idx"]
 
         if not (0 <= drop_x < self.board_canvas.winfo_width() and
                 0 <= drop_y < self.board_canvas.winfo_height()):
-            print(f"Soltado fuera del tablero. Volviendo pieza {original_idx}.")
             self._return_piece_to_side(original_idx)
             return
 
@@ -445,14 +432,12 @@ class PuzzleGame:
                     original_idx_in_shuffled_list = self.shuffled_indices.index(original_idx)
                     self.side_piece_labels[original_idx_in_shuffled_list].place_forget()
                 except ValueError:
-                    print(f"Advertencia: original_idx {original_idx} no encontrado en shuffled_indices al intentar ocultar.")
+                    pass
 
                 self._check_for_win()
             else:
-                print(f"Pieza {original_idx} incorrecta para slot {target_slot}. Volviendo.")
                 self._return_piece_to_side(original_idx)
         else:
-            print(f"Slot {target_slot} ocupado. Volviendo pieza {original_idx}.")
             self._return_piece_to_side(original_idx)
 
     def _release_piece_from_board(self, original_idx):
@@ -490,63 +475,57 @@ class PuzzleGame:
     def _show_win_screen(self):
         win_screen = tk.Toplevel(self.master)
         win_screen.title("¡Ganaste!")
-        win_screen.geometry("400x250") # Tamaño de la ventana de felicitación
+        win_screen.geometry("400x250") 
         win_screen.resizable(False, False)
         win_screen.attributes("-topmost", True) 
-        win_screen.grab_set() # Bloquea la interacción con la ventana principal
+        win_screen.grab_set() 
 
-        # Manejar el cierre con la X para liberar el grab_set
         win_screen.protocol("WM_DELETE_WINDOW", lambda: self._on_win_screen_close(win_screen))
 
         frame = tk.Frame(win_screen, bg=GameConfig.BG_COLOR_CARD, padx=20, pady=20)
         frame.pack(expand=True, fill="both")
 
-        # Mensaje de felicitación
         message_label = tk.Label(frame, text="¡Felicidades!",
                                  font=self.font_title,
                                  bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
         message_label.pack(pady=(10, 5))
 
         sub_message_label = tk.Label(frame, text="¡Completaste el rompecabezas! 🎉",
-                                      font=("Segoe UI", 14),
+                                      font=(SYSTEM_FONT, 14),
                                       bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
         sub_message_label.pack(pady=(0, 20))
 
-        # Contenedor para los botones
         button_frame = tk.Frame(frame, bg=GameConfig.BG_COLOR_CARD)
         button_frame.pack(pady=10)
 
-        # Botón "Siguiente Imagen"
         next_button = tk.Button(button_frame, text="Siguiente Imagen",
-                                font=("Segoe UI", 12, "bold"),
+                                font=(SYSTEM_FONT, 12, "bold"),
                                 bg=GameConfig.BUTTON_BG_COLOR, fg=GameConfig.BUTTON_TEXT_COLOR,
                                 activebackground=GameConfig.BUTTON_ACTIVE_BG_COLOR,
                                 relief="flat", bd=0, padx=15, pady=8,
                                 command=lambda: self._handle_win_action("next", win_screen))
         next_button.pack(side="left", padx=10)
 
-        # Botón "Volver al Menú"
         menu_button = tk.Button(button_frame, text="Volver al Menú",
-                                font=("Segoe UI", 12, "bold"),
+                                font=(SYSTEM_FONT, 12, "bold"),
                                 bg=GameConfig.BUTTON_BG_COLOR, fg=GameConfig.BUTTON_TEXT_COLOR,
                                 activebackground=GameConfig.BUTTON_ACTIVE_BG_COLOR,
                                 relief="flat", bd=0, padx=15, pady=8,
                                 command=lambda: self._handle_win_action("menu", win_screen))
         menu_button.pack(side="left", padx=10)
 
-        # Centrar la ventana de felicitación en la pantalla
         win_screen.update_idletasks()
         x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (win_screen.winfo_width() // 2)
         y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (win_screen.winfo_height() // 2)
         win_screen.geometry(f"+{x}+{y}")
 
     def _handle_win_action(self, action, win_screen):
-        win_screen.destroy() # Cierra la ventana de felicitación
+        win_screen.destroy() 
         self.master.grab_release() 
         if action == "next":
-            self._start_new_round() # Inicia una nueva ronda
+            self._start_new_round() 
         elif action == "menu":
-            self._back_to_menu() # Vuelve al menú principal
+            self._back_to_menu() 
 
     def _on_win_screen_close(self, win_screen):
         win_screen.destroy()
@@ -556,20 +535,27 @@ class PuzzleGame:
         self.master.destroy()
 
         try:
-            current_level_dir = os.path.dirname(os.path.abspath(__file__))
-            path_to_menu_script = os.path.join(current_level_dir, '..', 'menu', 'menu_rompecabezas.py')
+            # Lógica de navegación robusta
+            # Asumimos estructura: .../menu de juegos/rompecabezas/nivel1/nivel1.py
+            # Queremos ir a:       .../menu de juegos/rompecabezas/menu/menu_rompecabezas.py
+            
+            # Subimos un nivel desde 'nivel1' a 'rompecabezas' y luego entramos a 'menu'
+            path_to_menu_script = os.path.join(SCRIPT_DIR, '..', 'menu', 'menu_rompecabezas.py')
+            path_to_menu_script = os.path.normpath(path_to_menu_script) # Normalizar barras / o \
 
-            print(f"DEBUG: Desde nivel1.py, _back_to_menu")
-            print(f"DEBUG: Directorio actual del script: {current_level_dir}")
-            print(f"DEBUG: Ruta calculada para menu_rompecabezas.py: {path_to_menu_script}")
-            print(f"DEBUG: ¿Existe menu_rompecabezas.py en esta ruta? {os.path.exists(path_to_menu_script)}")
-
-            subprocess.Popen([sys.executable, path_to_menu_script])
+            if not os.path.exists(path_to_menu_script):
+                # Intento secundario por si la estructura de carpetas es diferente
+                path_to_menu_script = os.path.join(SCRIPT_DIR, '..', 'menu_rompecabezas.py')
+            
+            if os.path.exists(path_to_menu_script):
+                subprocess.Popen([sys.executable, path_to_menu_script])
+            else:
+                messagebox.showerror("Error", f"No se encuentra el menú en:\n{path_to_menu_script}")
+                
         except Exception as e:
-            messagebox.showerror("Error", f"No se pudo iniciar el menú: {e}. Revisa la consola para más detalles.", parent=self.master)
+            messagebox.showerror("Error", f"Error al volver: {e}", parent=self.master)
 
 if __name__ == "__main__":
-    import sys
     root = tk.Tk()
     game = PuzzleGame(root)
     root.mainloop()

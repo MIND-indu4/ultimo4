@@ -5,6 +5,18 @@ import random
 import os
 import sys
 import subprocess
+import platform # Necesario para saber si es Windows o Linux
+
+# ========== CONFIGURACIÓN GLOBAL ==========
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def get_system_font():
+    if platform.system() == "Windows":
+        return "Segoe UI"
+    else:
+        return "DejaVu Sans" # Estándar en Linux/Raspberry
+
+SYSTEM_FONT = get_system_font()
 
 # ---------- Configuración del Juego ----------
 class GameConfig:
@@ -12,8 +24,14 @@ class GameConfig:
     ROWS = 3
     COLS = 3
 
-
-    IMAGE_FILENAMES = ["amigos.png","escalar.png","horno de cocina.png","Año nuevo.png","esperar en la parada.png","estoy mal.png","freír un huevo.png","hacer la cama.png","picnic.png","tener calor.png"]
+    # IMPORTANTE PARA LINUX: 
+    # Revisa que tus archivos en la carpeta se llamen EXACTAMENTE así.
+    # "Año nuevo.png" no es lo mismo que "año nuevo.png" en Raspberry Pi.
+    IMAGE_FILENAMES = [
+        "amigos.png", "escalar.png", "horno de cocina.png", 
+        "Año nuevo.png", "esperar en la parada.png", "estoy mal.png", 
+        "freír un huevo.png", "hacer la cama.png", "picnic.png", "tener calor.png"
+    ]
 
     CURRENT_IMAGE_FILENAME = ""
     CURRENT_IMAGE_NAME = ""
@@ -40,6 +58,7 @@ class PuzzleGame:
     def __init__(self, master):
         self.master = master
         master.title("Rompecabezas Nivel 2")
+        
         screen_width = master.winfo_screenwidth()
         screen_height = master.winfo_screenheight()
         base_width = 1000
@@ -48,10 +67,12 @@ class PuzzleGame:
 
         master.attributes("-fullscreen", True)
         master.configure(bg=GameConfig.BG_COLOR_MAIN)
+        
+        # Salida con Escape
+        master.bind("<Escape>", lambda e: self._back_to_menu())
 
         # ✅ Aplicar escala
         self._apply_scaling()
-        master.configure(bg=GameConfig.BG_COLOR_MAIN)
 
         self.piece_images = []
         self.side_piece_labels = []
@@ -85,17 +106,18 @@ class PuzzleGame:
         GameConfig.SIDE_PIECE_PADDING_X = int(10 * scale)
         GameConfig.SIDE_PIECE_SPACING_Y = int(5 * scale)
 
-        # Escalar fuentes
-        self.font_title = ("Segoe UI", int(24 * scale), "bold")
-        self.font_name = ("Segoe UI", int(26 * scale), "bold")
-        self.font_button = ("Segoe UI", int(16 * scale), "bold")
-        self.font_win_title = ("Segoe UI", int(24 * scale), "bold")
-        self.font_win_msg = ("Segoe UI", int(14 * scale))
-        self.font_win_button = ("Segoe UI", int(12 * scale), "bold")
+        # Escalar fuentes (Usando SYSTEM_FONT)
+        self.font_title = (SYSTEM_FONT, int(24 * scale), "bold")
+        self.font_name = (SYSTEM_FONT, int(26 * scale), "bold")
+        self.font_button = (SYSTEM_FONT, int(16 * scale), "bold")
+        # Fuentes para ventana de victoria
+        self.font_win_title = (SYSTEM_FONT, int(24 * scale), "bold")
+        self.font_win_msg = (SYSTEM_FONT, int(14 * scale))
+        self.font_win_button = (SYSTEM_FONT, int(12 * scale), "bold")
 
     def _start_new_round(self):
         if not GameConfig.IMAGE_FILENAMES:
-            messagebox.showerror("Error", "No hay imágenes configuradas para el juego.", parent=self.master)
+            messagebox.showerror("Error", "No hay imágenes configuradas.", parent=self.master)
             return
 
         GameConfig.CURRENT_IMAGE_FILENAME = random.choice(GameConfig.IMAGE_FILENAMES)
@@ -113,40 +135,34 @@ class PuzzleGame:
         self.next_image_button.config(text="Siguiente Imagen")
 
     def _load_and_split_image(self):
-        filename_to_load = GameConfig.CURRENT_IMAGE_FILENAME
+        # Ruta absoluta segura
+        filename_to_load = os.path.join(SCRIPT_DIR, GameConfig.CURRENT_IMAGE_FILENAME)
 
-        if not os.path.exists(filename_to_load):
-            img = Image.new("RGBA", (GameConfig.PIECE_SIZE * GameConfig.COLS, GameConfig.PIECE_SIZE * GameConfig.ROWS), (200, 200, 255, 255))
-            draw = ImageDraw.Draw(img)
-            try:
-                font = ImageFont.truetype("arial.ttf", 20)
-            except IOError:
-                font = ImageFont.load_default()
-            text = f"IMAGEN NO ENCONTRADA\n({filename_to_load})"
-            text_bbox = draw.textbbox((0,0), text, font=font)
-            text_width = text_bbox[2] - text_bbox[0]
-            text_height = text_bbox[3] - text_bbox[1]
-            x_pos = (img.width - text_width) / 2
-            y_pos = (img.height - text_height) / 2
-            draw.text((x_pos, y_pos), text, fill="black", font=font, align="center")
-        else:
+        img = None
+        
+        if os.path.exists(filename_to_load):
             try:
                 img = Image.open(filename_to_load).convert("RGBA")
             except Exception as e:
-                img = Image.new("RGBA", (GameConfig.PIECE_SIZE * GameConfig.COLS, GameConfig.PIECE_SIZE * GameConfig.ROWS), (255, 150, 150, 255))
-                draw = ImageDraw.Draw(img)
-                try:
-                    font = ImageFont.truetype("arial.ttf", 14)
-                except IOError:
-                    font = ImageFont.load_default()
-                text = f"ERROR AL CARGAR:\n{e}"
-                text_bbox = draw.textbbox((0,0), text, font=font)
-                text_width = text_bbox[2] - text_bbox[0]
-                text_height = text_bbox[3] - text_bbox[1]
-                x_pos = (img.width - text_width) / 2
-                y_pos = (img.height - text_height) / 2
-                draw.text((x_pos, y_pos), text, fill="black", font=font, align="center")
+                print(f"Error cargando imagen: {e}")
+        else:
+            print(f"ADVERTENCIA: No encontrada: {filename_to_load}")
 
+        # Generar imagen de error si falló la carga
+        if img is None:
+            img = Image.new("RGBA", (GameConfig.PIECE_SIZE * GameConfig.COLS, GameConfig.PIECE_SIZE * GameConfig.ROWS), (200, 200, 255, 255))
+            draw = ImageDraw.Draw(img)
+            
+            try:
+                font = ImageFont.truetype("arial.ttf", 14) if platform.system() == "Windows" else ImageFont.load_default()
+            except:
+                font = ImageFont.load_default()
+                
+            text = f"ERROR:\n{GameConfig.CURRENT_IMAGE_FILENAME}"
+            # Dibujo simple de texto centrado
+            draw.text((10, 10), text, fill="black", font=font)
+
+        # Procesamiento de imagen
         min_dim = min(img.size)
         img = img.crop((0, 0, min_dim, min_dim))
         img = img.resize((GameConfig.PIECE_SIZE * GameConfig.COLS, GameConfig.PIECE_SIZE * GameConfig.ROWS), Image.LANCZOS)
@@ -192,24 +208,25 @@ class PuzzleGame:
                                         height=card_height - (2 * rounded_rect_padding))
 
         self.level_title_label = tk.Label(self.content_frame, text="Rompecabezas Nivel 2",
-                                          font=("Segoe UI", 24, "bold"),
+                                          font=self.font_title,
                                           bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
         self.level_title_label.pack(pady=(25, 10))
 
         header_frame_object = tk.Frame(self.content_frame, bg=GameConfig.BG_COLOR_CARD)
         header_frame_object.pack(pady=(0, 15))
 
-        sound_icon = tk.Label(header_frame_object, text="🔊", font=("Segoe UI Emoji", 26),
+        sound_icon = tk.Label(header_frame_object, text="🔊", font=("Segoe UI Emoji", 26) if platform.system() == "Windows" else (SYSTEM_FONT, 26),
                               bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.SOUND_ICON_COLOR)
         sound_icon.pack(side="left", padx=7)
 
-        self.object_name_label = tk.Label(header_frame_object, text="Objeto", font=("Segoe UI", 26, "bold"),
+        self.object_name_label = tk.Label(header_frame_object, text="Objeto", font=self.font_name,
                                            bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
         self.object_name_label.pack(side="left")
 
         game_area_frame = tk.Frame(self.content_frame, bg=GameConfig.BG_COLOR_CARD)
         game_area_frame.pack(pady=10, expand=True)
 
+        # Canvas laterales y tablero
         self.left_canvas_1 = tk.Canvas(game_area_frame, 
                                     width=side_canvas_width, height=side_canvas_height,
                                     bg=GameConfig.BG_COLOR_CARD, highlightthickness=0)
@@ -246,7 +263,7 @@ class PuzzleGame:
         buttons_frame.pack(pady=(20, 25))
 
         self.back_to_menu_button = tk.Button(buttons_frame, text="Volver al Menú",
-                                             font=("Segoe UI", 16, "bold"),
+                                             font=self.font_button,
                                              bg=GameConfig.BUTTON_BG_COLOR, fg=GameConfig.BUTTON_TEXT_COLOR,
                                              activebackground=GameConfig.BUTTON_ACTIVE_BG_COLOR,
                                              relief="flat", bd=0, padx=20, pady=10,
@@ -254,7 +271,7 @@ class PuzzleGame:
         self.back_to_menu_button.pack(side="left", padx=10)
 
         self.next_image_button = tk.Button(buttons_frame, text="Siguiente Imagen",
-                                      font=("Segoe UI", 16, "bold"),
+                                      font=self.font_button,
                                       bg=GameConfig.BUTTON_BG_COLOR, fg=GameConfig.BUTTON_TEXT_COLOR,
                                       activebackground=GameConfig.BUTTON_ACTIVE_BG_COLOR,
                                       relief="flat", bd=0, padx=20, pady=10,
@@ -289,11 +306,11 @@ class PuzzleGame:
         self.piece_initial_position = {}
 
         cols = [self.left_canvas_1, self.left_canvas_2, self.right_canvas_1, self.right_canvas_2]
-        counts = [2, 2, 2, 3] # Esto asegura que las 9 piezas se distribuyan correctamente
+        counts = [2, 2, 2, 3] 
         idx = 0
         for col_idx, canvas in enumerate(cols):
             for pos_in_col in range(counts[col_idx]):
-                if idx >= len(self.shuffled_indices): # Asegurarse de no exceder el número de piezas
+                if idx >= len(self.shuffled_indices): 
                     break
                 original_idx = self.shuffled_indices[idx]
                 idx += 1
@@ -369,13 +386,7 @@ class PuzzleGame:
             return
         x, y, canvas_widget = self.piece_initial_position[original_idx]
         try:
-            # Encuentra el Label de la pieza en la lista de side_piece_labels
-            # Esto puede ser un poco más complicado con la nueva distribución,
-            # pero podemos iterar sobre todos los labels y verificar su imagen/contenido
             for lbl in self.side_piece_labels:
-                # Compara la imagen de la pieza original con la imagen del label
-                # Asumiendo que 'image' del label es la ImageTk.PhotoImage
-                # y que photo_image de la pieza original es la misma
                 if lbl.image == self.piece_images[original_idx]:
                     lbl.place(x=x, y=y)
                     break
@@ -408,16 +419,13 @@ class PuzzleGame:
                 self.occupied_slots[target_slot] = img_id
                 self.piece_current_slot[original_idx] = target_slot
 
-                # Encontrar y ocultar el Label original en los canvases laterales
                 found_and_hidden = False
                 for lbl in self.side_piece_labels:
                     if hasattr(lbl, 'image') and lbl.image == self.piece_images[original_idx]:
                         lbl.place_forget()
                         found_and_hidden = True
                         break
-                if not found_and_hidden:
-                    print(f"Advertencia: No se encontró el Label de la pieza {original_idx} en side_piece_labels para ocultar.")
-
+                
                 self._check_for_win()
             else:
                 self._return_piece_to_side(original_idx)
@@ -443,7 +451,7 @@ class PuzzleGame:
             for c in range(GameConfig.COLS):
                 slot = (r, c)
                 img_id = self.occupied_slots[slot]
-                expected_original_idx = r * GameConfig.COLS + c # Corregido: antes usaba 'col' en lugar de 'c'
+                expected_original_idx = r * GameConfig.COLS + c 
 
                 if img_id is None or int(self.board_canvas.gettags(img_id)[0]) != expected_original_idx:
                     all_correct = False
@@ -452,12 +460,9 @@ class PuzzleGame:
                 break
 
         if all_correct:
-            # --- MODIFICADO: Llama a la nueva pantalla de victoria ---
             self._show_win_screen()
-            # Asegura que el botón "Siguiente Imagen" siempre muestre el texto correcto
             self.next_image_button.config(text="Siguiente Imagen")
     
-    # --- INICIO DE LAS NUEVAS FUNCIONES PARA LA PANTALLA DE VICTORIA (copiado de Nivel 1) ---
     def _show_win_screen(self):
         win_screen = tk.Toplevel(self.master)
         win_screen.title("¡Ganaste!")
@@ -474,12 +479,12 @@ class PuzzleGame:
         frame.pack(expand=True, fill="both")
 
         message_label = tk.Label(frame, text="¡Felicidades!",
-                                 font=("Segoe UI", 24, "bold"),
+                                 font=self.font_win_title,
                                  bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
         message_label.pack(pady=(10, 5))
 
         sub_message_label = tk.Label(frame, text="¡Completaste el rompecabezas! 🎉",
-                                      font=("Segoe UI", 14),
+                                      font=self.font_win_msg,
                                       bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
         sub_message_label.pack(pady=(0, 20))
 
@@ -487,7 +492,7 @@ class PuzzleGame:
         button_frame.pack(pady=10)
 
         next_button = tk.Button(button_frame, text="Siguiente Imagen",
-                                font=("Segoe UI", 12, "bold"),
+                                font=self.font_win_button,
                                 bg=GameConfig.BUTTON_BG_COLOR, fg=GameConfig.BUTTON_TEXT_COLOR,
                                 activebackground=GameConfig.BUTTON_ACTIVE_BG_COLOR,
                                 relief="flat", bd=0, padx=15, pady=8,
@@ -495,7 +500,7 @@ class PuzzleGame:
         next_button.pack(side="left", padx=10)
 
         menu_button = tk.Button(button_frame, text="Volver al Menú",
-                                font=("Segoe UI", 12, "bold"),
+                                font=self.font_win_button,
                                 bg=GameConfig.BUTTON_BG_COLOR, fg=GameConfig.BUTTON_TEXT_COLOR,
                                 activebackground=GameConfig.BUTTON_ACTIVE_BG_COLOR,
                                 relief="flat", bd=0, padx=15, pady=8,
@@ -518,19 +523,24 @@ class PuzzleGame:
     def _on_win_screen_close(self, win_screen):
         win_screen.destroy()
         self.master.grab_release()
-    # --- FIN DE LAS NUEVAS FUNCIONES PARA LA PANTALLA DE VICTORIA ---
-
 
     def _back_to_menu(self):
         self.master.destroy()
         try:
-            current_level_dir = os.path.dirname(os.path.abspath(__file__))
-            path_to_menu_script = os.path.join(current_level_dir, '..', 'menu', 'menu_rompecabezas.py')
-            subprocess.Popen([sys.executable, path_to_menu_script])
+            # Búsqueda robusta del menú
+            path_to_menu_script = os.path.join(SCRIPT_DIR, '..', 'menu', 'menu_rompecabezas.py')
+            path_to_menu_script = os.path.normpath(path_to_menu_script)
+            
+            if not os.path.exists(path_to_menu_script):
+                path_to_menu_script = os.path.join(SCRIPT_DIR, '..', 'menu_rompecabezas.py')
+                
+            if os.path.exists(path_to_menu_script):
+                subprocess.Popen([sys.executable, path_to_menu_script])
+            else:
+                messagebox.showerror("Error", f"No se encuentra: {path_to_menu_script}")
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo iniciar el menú: {e}", parent=self.master)
 
-# -------------- Iniciar el Juego --------------
 if __name__ == "__main__":
     root = tk.Tk()
     game = PuzzleGame(root)

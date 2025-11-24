@@ -3,36 +3,44 @@ from tkinter import messagebox, Frame, Button, Label
 import subprocess
 import sys
 import os
+import platform  # 🔥 FIX: Necesario para detectar OS
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 
-# ========== RUTAS ABSOLUTAS FORZADAS ==========
+# ========== DETECCIÓN DE SISTEMA ==========
+ES_WINDOWS = platform.system() == "Windows"
+
+# ========== RUTAS (Optimizada) ==========
 def get_project_root():
-    try:
-        script_path = os.path.abspath(__file__)
-        path_parts = script_path.split(os.sep)
-
-        if 'MIND' in path_parts:
-            mind_index = path_parts.index('MIND')
-            project_root = os.sep.join(path_parts[:mind_index + 1])
-            if os.path.exists(project_root):
-                return project_root
-
-        script_dir = os.path.dirname(script_path)
-        project_root = os.path.dirname(script_dir)
-        if os.path.exists(project_root):
-            return project_root
-
-        return script_dir 
-
-    except Exception as e:
-        messagebox.showerror("ERROR CRÍTICO", f"Excepción al determinar PROJECT_ROOT:\n{e}")
-        sys.exit(1)
+    # 🔥 FIX: Método más seguro que no depende del nombre "MIND"
+    # Busca la carpeta donde está este script y asume que es la raíz
+    # o sube un nivel si estás dentro de una subcarpeta 'menu'.
+    script_path = os.path.abspath(__file__)
+    script_dir = os.path.dirname(script_path)
+    
+    # Si hay una carpeta assets al lado, estamos en la raíz
+    if os.path.exists(os.path.join(script_dir, "simondice.png")): 
+        return script_dir
+    
+    # Si no, subimos un nivel (por si organizaste en carpetas)
+    parent_dir = os.path.dirname(script_dir)
+    return parent_dir
 
 PROJECT_ROOT = get_project_root()
 
 def get_safe_path(*path_parts):
     safe_path = os.path.join(PROJECT_ROOT, *path_parts)
     return os.path.abspath(safe_path)
+
+# ========== FUENTE (Font) COMPATIBLE ==========
+def get_font_name():
+    # 🔥 FIX: Arial solo en Windows. En Linux usamos DejaVu o Liberation
+    if ES_WINDOWS:
+        return "arial.ttf"
+    else:
+        # DejaVuSans suele venir preinstalada en Raspberry Pi OS
+        return "DejaVuSans.ttf" 
+
+FONT_NAME = get_font_name()
 
 # ========== EXTENSIÓN DE CANVAS ==========
 def _round_rectangle(self, x1, y1, x2, y2, radius, **kwargs):
@@ -49,11 +57,14 @@ class GameMenu:
         self.master = master
         self.main_project_root = PROJECT_ROOT
         
+        # Configuración de pantalla completa
         master.attributes("-fullscreen", True)
         master.bind("<Escape>", self.toggle_fullscreen)
         
         self.screen_width = master.winfo_screenwidth()
         self.screen_height = master.winfo_screenheight()
+        
+        # 🔥 FIX: Ajuste de escala para Raspberry Pi (que a veces tiene resoluciones raras)
         self.base_width = 1000
         self.base_height = 800
         self.scale = min(self.screen_width / self.base_width, self.screen_height / self.base_height)
@@ -70,6 +81,7 @@ class GameMenu:
         master.config(bg=self.yellow_bg)
         self.menu_open = False
         
+        # Diccionario de imágenes
         self.icon_paths = {
             "simon": "simondice.png", 
             "puzzle": "rompecabezas.png", 
@@ -112,8 +124,11 @@ class GameMenu:
                 img = Image.new('RGBA', (size, size), (255, 255, 255, 0)) 
                 draw = ImageDraw.Draw(img)
                 try:
-                    font = ImageFont.truetype("arial.ttf", int(size * 0.7) if icon_type == "corner" else int(size * 0.6))
+                    # 🔥 FIX: Usamos la variable FONT_NAME definida arriba
+                    font = ImageFont.truetype(FONT_NAME, int(size * 0.7) if icon_type == "corner" else int(size * 0.6))
                 except IOError:
+                    # Si falla, carga la por defecto del sistema
+                    print(f"Fuente {FONT_NAME} no encontrada, usando default.")
                     font = ImageFont.load_default()
                 
                 if icon_type == "game":
@@ -131,6 +146,8 @@ class GameMenu:
                 img.save(full_path)
 
     def load_icons(self):
+        # ... (Código igual, omitido para brevedad) ...
+        # La lógica aquí estaba bien
         scaled_game_size = int(140 * self.scale)
         scaled_small_size = int(40 * self.scale)
         for name, filename in self.icon_paths.items():
@@ -143,9 +160,11 @@ class GameMenu:
                     img = img.resize((scaled_game_size, scaled_game_size), Image.LANCZOS)
                 self.icons[name] = ImageTk.PhotoImage(img)
             except Exception as e:
+                print(f"Error cargando icono {name}: {e}")
                 self.icons[name] = None
 
     def create_widgets(self):
+        # ... (Sin cambios necesarios, tu lógica de Tkinter es correcta) ...
         margin = int(40 * self.scale)
         self.main_canvas = tk.Canvas(self.master, bg=self.yellow_bg, highlightthickness=0, bd=0)
         self.main_canvas.place(x=margin, y=margin, width=self.screen_width - 2*margin, height=self.screen_height - 2*margin)
@@ -159,6 +178,8 @@ class GameMenu:
                                                   fill=self.white_frame_bg, outline="", width=0)
 
         title_font_size = int(28 * self.scale)
+        # Nota: Tkinter usa fuentes por nombre de sistema, Arial suele funcionar en Linux si está instalada,
+        # si no Tkinter usa una alternativa automáticamente, así que esto está "ok".
         title_label = tk.Label(self.main_canvas, text="Seleccione una actividad",
                                font=("Arial", title_font_size, "bold"),
                                fg=self.text_color, bg=self.white_frame_bg)
@@ -188,6 +209,7 @@ class GameMenu:
         self.position_corner_buttons()
 
     def create_game_button(self, parent, text, icon_image, command, border_color, row, col, dimensions, pad):
+        # ... (Código sin cambios, funciona bien) ...
         frame_wrapper = tk.Frame(parent, bg=self.white_frame_bg)
         frame_wrapper.grid(row=row, column=col, padx=pad, pady=pad)
 
@@ -226,6 +248,7 @@ class GameMenu:
         text_label.bind("<Button-1>", lambda e: command())
         button_canvas.bind("<Button-1>", lambda e: command())
 
+    # ... (Métodos de menú lateral omitidos, funcionan bien) ...
     def create_side_menu(self):
         self.side_menu_frame = Frame(self.master, bg=self.menu_bg, relief="flat")
         menu_title = Label(self.side_menu_frame, text="MENÚ", 
@@ -307,36 +330,22 @@ class GameMenu:
             x_pos = window_width - btn_width - button_padding
             self.close_btn.place(x=x_pos, y=button_padding)
 
-    # ========== LÓGICA DE NAVEGACIÓN ==========
+    # ========== LÓGICA DE NAVEGACIÓN CORREGIDA ==========
     def run_game1(self):
-        self._open_and_close('menu de juegos', 'simon dice', 'menu', 'menu_simondice.py') 
+        # QUITÉ 'menu de juegos' del principio
+        self._open_and_close('simon dice', 'menu', 'menu_simondice.py') 
 
     def run_game2(self):
-        self._open_and_close('menu de juegos', 'rompecabezas', 'menu', 'menu_rompecabezas.py')
+        # QUITÉ 'menu de juegos' del principio
+        self._open_and_close('rompecabezas', 'menu', 'menu_rompecabezas.py')
 
     def run_game3(self):
-        self._open_and_close('menu de juegos', 'matematicas', 'menu', 'menumatematicas.py')
+        # QUITÉ 'menu de juegos' del principio
+        self._open_and_close('matematicas', 'menu', 'menumatematicas.py')
 
     def run_game4(self):
-        self._open_and_close('menu de juegos', 'pictogramas', 'TEAyudo.py')    
-        
-        target_path = None
-        for ruta in posibles_rutas:
-            if os.path.exists(ruta):
-                target_path = ruta
-                break
-
-        if target_path:
-            self._launch_external_script(target_path)
-        else:
-            rutas_str = "\n".join(posibles_rutas)
-            messagebox.showerror("Error", f"No se encontró TEAyudo.py en ninguna de estas ubicaciones:\n{rutas_str}")
-
-    def _launch_external_script(self, path):
-        self.master.destroy()
-        cwd = os.path.dirname(path)
-        subprocess.Popen([sys.executable, "-u", path], cwd=cwd)
-        sys.exit(0)
+        # QUITÉ 'menu de juegos' del principio
+        self._open_and_close('pictogramas', 'TEAyudo.py')  
 
     def _open_and_close(self, *path_segments_to_script):
         try:
@@ -352,13 +361,23 @@ class GameMenu:
                 return
 
             self.master.destroy() 
+            
             cmd = [sys.executable, "-u", script_path]
-            flags = subprocess.DETACHED_PROCESS if sys.platform == "win32" else 0
-            subprocess.Popen(cmd, cwd=script_dir, creationflags=flags)
+            
+            # 🔥 FIX CRÍTICO: 'creationflags' SOLO existe en Windows.
+            # En Linux, subprocess.Popen NO tiene ese argumento y da error si se pasa 0.
+            kwargs = {}
+            if ES_WINDOWS:
+                kwargs['creationflags'] = subprocess.DETACHED_PROCESS
+            
+            subprocess.Popen(cmd, cwd=script_dir, **kwargs)
+            
             sys.exit(0)
             
         except Exception as e:
-            messagebox.showerror("Error Fatal", f"Error al abrir juego:\n{e}")
+            # Usamos print también por si la ventana ya se cerró
+            print(f"Error al abrir juego: {e}")
+            # messagebox.showerror("Error Fatal", f"Error al abrir juego:\n{e}")
 
     def show_stats(self):
         messagebox.showinfo("Estadísticas", "Próximamente: Estadísticas de juego")

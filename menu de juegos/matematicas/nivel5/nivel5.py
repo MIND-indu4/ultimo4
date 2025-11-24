@@ -5,31 +5,31 @@ import random
 import os
 import sys
 import subprocess
+import platform
+
+# ========== CONFIGURACIÓN DE SISTEMA ==========
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SYSTEM_OS = platform.system()
+
+def get_system_font():
+    return "Arial" if SYSTEM_OS == "Windows" else "DejaVu Sans"
+
+SYSTEM_FONT = get_system_font()
 
 # --- CONFIGURACIÓN ---
 class GameConfig:
-    MAIN_COLOR = "#4CAF50"       # Verde vibrante (Estilo Nivel 1 y 2)
+    MAIN_COLOR = "#00C853"       # Verde vibrante (Material Green A700)
     TEXT_DARK = "#212121"
     CARD_COLOR = "white"
     
     # Imágenes (Verduras y Frutas)
     IMAGENES = [
-        "manzana.png", 
-        "pera.jpg", 
-        "banana.png", 
-        "frutilla.png", 
-        "naranja.png",
-        "limon.png",
-        "piña.png",
-        "sandia.png",
-        "papa.png", 
-        "zanahoria.png", 
-        "brocoli.png", 
-        "cebolla.png",
-        "tomate.png", 
-        "lechuga.png",    
-        "pepino.png",
-        "calabaza.png"
+        "manzana.png", "pera.png", "banana.png", 
+        "frutilla.png", "naranja.png", "limon.png",
+        "piña.png", "sandia.png",
+        "papa.png", "zanahoria.png", "brocoli.png", 
+        "cebolla.png", "tomate.png", "lechuga.png",    
+        "pepino.png", "calabaza.png"
     ]
 
 # --- FUNCIONES AUXILIARES ---
@@ -43,8 +43,14 @@ class MathDragGameLevel5:
     def __init__(self, master):
         self.master = master
         master.title("Matemáticas - Nivel 5: Completar Suma")
-        master.attributes("-fullscreen", True)
+        
+        if SYSTEM_OS == "Windows":
+            master.attributes("-fullscreen", True)
+        else:
+            master.attributes("-fullscreen", True)
+            
         master.configure(bg=GameConfig.MAIN_COLOR)
+        master.bind("<Escape>", self.volver_al_menu)
 
         # Escala dinámica
         screen_width = master.winfo_screenwidth()
@@ -54,14 +60,14 @@ class MathDragGameLevel5:
         self.scale = min(screen_width / base_width, screen_height / base_height)
 
         # Fuentes
-        self.font_title = ("Arial", int(32 * self.scale), "bold")
-        self.font_signos = ("Arial", int(60 * self.scale), "bold") # Signos grandes
-        self.font_btn = ("Arial", int(14 * self.scale), "bold")
+        self.font_title = (SYSTEM_FONT, int(32 * self.scale), "bold")
+        self.font_signos = (SYSTEM_FONT, int(60 * self.scale), "bold") # Signos grandes
+        self.font_btn = (SYSTEM_FONT, int(14 * self.scale), "bold")
         
         # Tamaño de las cajas
         self.box_size = int(140 * self.scale) 
         
-        self.drag_data = {"item": None}
+        self.drag_data = {"item": None, "offset_x": 0, "offset_y": 0}
 
         self._create_gui()
         self._start_new_round()
@@ -88,10 +94,10 @@ class MathDragGameLevel5:
         self.content_frame.place(x=cx - cw//2 + 20, y=cy - ch//2 + 20, width=self.ancho_real_frame, height=ch-40)
 
         # Botón Menú
-        self.btn_menu = tk.Label(self.content_frame, text="Menú", font=self.font_btn, 
+        self.btn_menu = tk.Label(self.content_frame, text="⬅ Menú", font=self.font_btn, 
                                    bg=GameConfig.MAIN_COLOR, fg="white", padx=15, pady=8, cursor="hand2")
         self.btn_menu.place(x=10, y=10)
-        self.btn_menu.bind("<Button-1>", self.volver_al_menu)
+        self.btn_menu.bind("<Button-1>", lambda e: self.volver_al_menu())
         
         # Título
         tk.Label(self.content_frame, text="¡COMPLÉTALO!", font=self.font_title, 
@@ -136,7 +142,7 @@ class MathDragGameLevel5:
         # 1. Lógica Matemática
         self.item_type = random.choice(GameConfig.IMAGENES)
         
-        # Generar números (Total hasta 9)
+        # Generar números (Total hasta 9 para que entre en la grilla)
         self.total_num = random.randint(2, 9)
         # El primer número debe ser menor al total
         self.num1 = random.randint(1, self.total_num - 1)
@@ -212,6 +218,8 @@ class MathDragGameLevel5:
         if widget.bloqueado: return
         widget.lift()
         self.drag_data["item"] = widget
+        self.drag_data["offset_x"] = event.x
+        self.drag_data["offset_y"] = event.y
 
     def do_drag(self, event):
         widget = self.drag_data["item"]
@@ -220,7 +228,18 @@ class MathDragGameLevel5:
         mx = self.content_frame.winfo_pointerx() - self.content_frame.winfo_rootx()
         my = self.content_frame.winfo_pointery() - self.content_frame.winfo_rooty()
         
-        widget.place(x=mx - (widget.winfo_width()//2), y=my - (widget.winfo_height()//2))
+        # Mover suavemente centrado o con offset
+        # Usamos el cálculo del Nivel 4 que funcionó bien
+        x_root = event.x_root
+        y_root = event.y_root
+        
+        frame_x = self.content_frame.winfo_rootx()
+        frame_y = self.content_frame.winfo_rooty()
+        
+        new_x = x_root - frame_x - self.drag_data["offset_x"]
+        new_y = y_root - frame_y - self.drag_data["offset_y"]
+        
+        widget.place(x=new_x, y=new_y)
 
     def end_drag(self, event):
         widget = self.drag_data["item"]
@@ -287,15 +306,8 @@ class MathDragGameLevel5:
         
         # Borde de color según si es opción o parte de la ecuación
         color_borde = GameConfig.MAIN_COLOR if es_opcion else GameConfig.TEXT_DARK
-        # Si es opción (ficha de abajo), un poco más grueso y colorido
         w_borde = 3 if es_opcion else 2
-        # Si la opción NO es la del tipo correcto (distractor visual), borde dorado/marrón como en la foto
-        if es_opcion and "papa" not in nombre_archivo: 
-            # Nota: En tu foto, las papas tienen borde marrón, las fresas rojo, limones amarillo.
-            # Para simplificar, usamos colores genéricos o el verde principal.
-            # Usaremos un color dorado/marrón genérico para las opciones para que parezcan fichas
-            color_borde = "#C19A6B" # Marrón claro / Dorado
-
+        
         draw.rectangle([0, 0, s-1, s-1], outline=color_borde, width=w_borde)
 
         item_img = None
@@ -312,9 +324,9 @@ class MathDragGameLevel5:
             rutas.append(os.path.join("..", "nivel2", f))
 
         for r in rutas:
-            if os.path.exists(r):
+            if os.path.exists(os.path.join(SCRIPT_DIR, r)):
                 try:
-                    item_img = Image.open(r).convert("RGBA")
+                    item_img = Image.open(os.path.join(SCRIPT_DIR, r)).convert("RGBA")
                     break
                 except: pass
 
@@ -371,11 +383,15 @@ class MathDragGameLevel5:
     def volver_al_menu(self, event=None):
         ruta_actual = os.path.dirname(os.path.abspath(__file__))
         ruta_menu = os.path.join(ruta_actual, "..", "menu", "menumatematicas.py")
+        
         if os.path.exists(ruta_menu):
             self.master.destroy()
-            subprocess.Popen([sys.executable, ruta_menu])
+            if SYSTEM_OS == "Windows":
+                subprocess.Popen([sys.executable, ruta_menu], creationflags=subprocess.DETACHED_PROCESS)
+            else:
+                subprocess.Popen([sys.executable, ruta_menu])
         else:
-            messagebox.showerror("Error", f"No se encontró el menú: {ruta_menu}")
+            messagebox.showerror("Error", f"No se encontró el menú en:\n{ruta_menu}")
 
 if __name__ == "__main__":
     root = tk.Tk()

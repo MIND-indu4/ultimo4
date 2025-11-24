@@ -5,17 +5,26 @@ import random
 import os
 import sys
 import subprocess
+import platform
 
-# --- CONFIGURACIÓN ---
+# ========== CONFIGURACIÓN DE SISTEMA ==========
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SYSTEM_OS = platform.system()
+
+def get_system_font():
+    return "Arial" if SYSTEM_OS == "Windows" else "DejaVu Sans"
+
+SYSTEM_FONT = get_system_font()
+
+# --- CONFIGURACIÓN VISUAL ---
 class GameConfig:
-    # VOLVEMOS AL VERDE
-    MAIN_COLOR = "#4CAF50"       
+    MAIN_COLOR = "#4CAF50"       # Verde
     TEXT_DARK = "#212121"
     CARD_COLOR = "white"
-    DIVIDER_COLOR = "#4CAF50"
+    DIVIDER_COLOR = "#A5D6A7"    # Verde claro para líneas divisorias
     
-    # Tipos de pelota
-    BALL_TYPES = ["futbol", "basquet", "tenis", "voley"]
+    # Orden: Mil, Centena, Decena, Unidad
+    BALL_TYPES = ["futbol.png", "basquet.png", "tenis.png", "voley.jpg"]
 
 # --- FUNCIONES AUXILIARES ---
 def create_rounded_rectangle(canvas, x1, y1, x2, y2, radius, **kwargs):
@@ -28,8 +37,14 @@ class MathDragGameLevel4:
     def __init__(self, master):
         self.master = master
         master.title("Matemáticas - Nivel 4")
-        master.attributes("-fullscreen", True)
+        
+        if SYSTEM_OS == "Windows":
+            master.attributes("-fullscreen", True)
+        else:
+            master.attributes("-fullscreen", True)
+            
         master.configure(bg=GameConfig.MAIN_COLOR)
+        master.bind("<Escape>", self.volver_al_menu)
 
         # Escala dinámica
         screen_width = master.winfo_screenwidth()
@@ -39,14 +54,15 @@ class MathDragGameLevel4:
         self.scale = min(screen_width / base_width, screen_height / base_height)
 
         # Fuentes
-        self.font_header = ("Arial", int(18 * self.scale), "bold")
-        self.font_btn = ("Arial", int(14 * self.scale), "bold")
+        self.font_title = (SYSTEM_FONT, int(24 * self.scale), "bold")
+        self.font_header = (SYSTEM_FONT, int(16 * self.scale), "bold")
+        self.font_btn = (SYSTEM_FONT, int(14 * self.scale), "bold")
         
         # Tamaños
-        self.ball_size = int(70 * self.scale) 
-        self.box_size = int(110 * self.scale) # Tamaño de las fichas de números
+        self.ball_size = int(50 * self.scale) # Pelotas un poco más chicas para que entren varias
+        self.box_size = int(100 * self.scale) # Fichas de números
         
-        self.drag_data = {"item": None}
+        self.drag_data = {"item": None, "offset_x": 0, "offset_y": 0}
         
         # Variables de juego
         self.target_values = [] 
@@ -56,115 +72,120 @@ class MathDragGameLevel4:
         self._start_new_round()
 
     def _create_gui(self):
-        # Canvas Principal
         self.main_canvas = tk.Canvas(self.master, bg=GameConfig.MAIN_COLOR, highlightthickness=0)
         self.main_canvas.pack(fill="both", expand=True)
 
         sw = self.master.winfo_screenwidth()
         sh = self.master.winfo_screenheight()
-        cw = int(sw * 0.85)
-        ch = int(sh * 0.85)
+        cw = int(sw * 0.90)
+        ch = int(sh * 0.90)
         cx = sw // 2
         cy = sh // 2
         
         self.ancho_real_frame = cw - 40
 
-        # Tarjeta Blanca
         create_rounded_rectangle(self.main_canvas, cx - cw//2, cy - ch//2, cx + cw//2, cy + ch//2, radius=40, fill=GameConfig.CARD_COLOR)
 
         self.content_frame = tk.Frame(self.main_canvas, bg=GameConfig.CARD_COLOR)
         self.content_frame.place(x=cx - cw//2 + 20, y=cy - ch//2 + 20, width=self.ancho_real_frame, height=ch-40)
 
         # Botón Menú
-        self.btn_menu = tk.Label(self.content_frame, text="Menú", font=self.font_btn, 
+        self.btn_menu = tk.Label(self.content_frame, text="⬅ Menú", font=self.font_btn, 
                                    bg=GameConfig.MAIN_COLOR, fg="white", padx=15, pady=8, cursor="hand2")
         self.btn_menu.place(x=10, y=10)
-        self.btn_menu.bind("<Button-1>", self.volver_al_menu)
+        self.btn_menu.bind("<Button-1>", lambda e: self.volver_al_menu())
+
+        # Título
+        tk.Label(self.content_frame, text="Cuenta las pelotas y arrastra el número correcto", font=self.font_title, 
+                 bg=GameConfig.CARD_COLOR, fg=GameConfig.TEXT_DARK).pack(pady=(10, 10))
 
         # --- ÁREA SUPERIOR: LOS 4 CASILLEROS PARA RESPONDER ---
         self.frame_top_container = tk.Frame(self.content_frame, bg=GameConfig.CARD_COLOR)
-        self.frame_top_container.pack(pady=(20, 10))
+        self.frame_top_container.pack(pady=(10, 10))
 
-        # Creamos 4 Labels que serán los "Slots" vacíos
         self.target_widgets = []
+        # Creamos los 4 slots vacíos
         for i in range(4):
-            # Inicializamos sin imagen, se carga en start_new_round
             lbl = tk.Label(self.frame_top_container, bg=GameConfig.CARD_COLOR, bd=0)
-            lbl.pack(side="left", padx=10)
+            lbl.pack(side="left", padx=15)
             self.target_widgets.append(lbl)
 
-        # --- ÁREA CENTRAL: COLUMNAS ---
+        # --- ÁREA CENTRAL: COLUMNAS CON PELOTAS ---
         self.frame_columns = tk.Frame(self.content_frame, bg=GameConfig.CARD_COLOR)
-        self.frame_columns.pack(expand=True, fill="both", padx=40, pady=10)
+        self.frame_columns.pack(expand=True, fill="both", padx=40, pady=5)
         
-        for i in range(7): # 4 datos + 3 separadores
+        for i in range(7): # 4 columnas + 3 separadores
             if i % 2 == 0: self.frame_columns.columnconfigure(i, weight=1)
             else: self.frame_columns.columnconfigure(i, weight=0)
         self.frame_columns.rowconfigure(1, weight=1)
 
-        headers = ["Unidad de mil", "Centena", "Decena", "Unidad"]
+        headers = ["Unidad de Mil", "Centena", "Decena", "Unidad"]
         self.column_areas = [] 
 
         for i, title in enumerate(headers):
             grid_col = i * 2
             
-            # Título
+            # Título Columna
             tk.Label(self.frame_columns, text=title, font=self.font_header, 
-                     bg=GameConfig.CARD_COLOR, fg=GameConfig.TEXT_DARK).grid(row=0, column=grid_col, pady=(0,10))
+                     bg=GameConfig.CARD_COLOR, fg="#555").grid(row=0, column=grid_col, pady=(0,5))
             
-            # Área de pelotas (Frame donde dibujaremos las bolas estáticas)
-            ball_area = tk.Frame(self.frame_columns, bg=GameConfig.CARD_COLOR) 
+            # Área donde se dibujarán las pelotas
+            ball_area = tk.Frame(self.frame_columns, bg="#F1F8E9") # Fondo verde muy claro 
             ball_area.grid(row=1, column=grid_col, sticky="nsew", padx=5)
             self.column_areas.append(ball_area)
 
-            # Divisor (Línea Verde)
+            # Divisor
             if i < 3:
                 sep_col = grid_col + 1
-                separator = tk.Frame(self.frame_columns, bg=GameConfig.DIVIDER_COLOR, width=3)
-                separator.grid(row=0, column=sep_col, rowspan=2, sticky="ns", padx=5)
+                separator = tk.Frame(self.frame_columns, bg=GameConfig.DIVIDER_COLOR, width=2)
+                separator.grid(row=0, column=sep_col, rowspan=2, sticky="ns", padx=2)
 
     def _start_new_round(self):
-        # 1. Limpiar área de pelotas (centro)
+        # 1. Limpiar pelotas visuales
         for area in self.column_areas:
             for widget in area.winfo_children():
                 widget.destroy()
         
-        # 2. Limpiar fichas de números (abajo)
+        # 2. Limpiar fichas de números (arrastrables)
         for widget in self.content_frame.winfo_children():
             if hasattr(widget, "es_ficha_numero"):
                 widget.destroy()
 
-        # 3. Reiniciar Slots de arriba (Ponerlos como cajas vacías)
-        self.img_slot_vacio = self.crear_imagen_slot_vacio() # Crear imagen de caja vacía
+        # 3. Reiniciar Slots superiores
+        self.img_slot_vacio = self.crear_imagen_slot_vacio()
         self.slots_filled = [False] * 4
         
         for slot in self.target_widgets:
             slot.config(image=self.img_slot_vacio)
-            slot.image = self.img_slot_vacio # Referencia para evitar basura
+            slot.image = self.img_slot_vacio
             slot.ocupado_por = None
 
-        # 4. Generar número aleatorio
+        # 4. Generar cantidades (No usar 0 para hacerlo más visual)
         d1 = random.randint(1, 4)
         d2 = random.randint(1, 5)
         d3 = random.randint(1, 5)
         d4 = random.randint(1, 5)
         self.target_values = [d1, d2, d3, d4]
         
-        # 5. DIBUJAR PELOTAS ESTÁTICAS
+        # 5. DIBUJAR PELOTAS EN LAS COLUMNAS
         for i, cantidad in enumerate(self.target_values):
             self.dibujar_pelotas_en_columna(i, cantidad)
 
-        # 6. Generar Opciones (Fichas de números abajo)
+        # 6. Generar Fichas de Números (Opciones)
+        # Incluimos las respuestas correctas + distractores
         opciones = self.target_values.copy()
         while len(opciones) < 6: 
-            n = random.randint(0, 9)
+            n = random.randint(1, 9)
             opciones.append(n)
+        
+        # Barajar para que no estén en orden
         random.shuffle(opciones)
 
-        # 7. Dibujar fichas abajo
+        # 7. Posicionar Fichas abajo
         frame_w = self.ancho_real_frame
-        y_pos = self.content_frame.winfo_height() - int(150 * self.scale)
-        if y_pos < 0: y_pos = int(self.master.winfo_screenheight() * 0.85) - int(160 * self.scale)
+        y_pos = self.content_frame.winfo_height() - int(160 * self.scale)
+        # Corrección si la ventana aún no se dibujó
+        if y_pos < 0: y_pos = int(self.master.winfo_screenheight() * 0.90) - int(180 * self.scale)
         
         zona_width = int(frame_w / 6)
         
@@ -184,28 +205,29 @@ class MathDragGameLevel4:
             lbl.home_y = y_pos
             lbl.bloqueado = False 
 
+            # Bindings de arrastre
             lbl.bind("<Button-1>", self.start_drag)
             lbl.bind("<B1-Motion>", self.do_drag)
             lbl.bind("<ButtonRelease-1>", self.end_drag)
 
     def dibujar_pelotas_en_columna(self, col_idx, cantidad):
-        """Dibuja las pelotas quietas en la columna"""
+        """Dibuja las pelotas estáticas en la columna correspondiente"""
         area = self.column_areas[col_idx]
         tipo_pelota = GameConfig.BALL_TYPES[col_idx]
         img_pelota = self.crear_imagen_pelota(tipo_pelota)
         
-        # Frame interno para centrar el grupo de pelotas
-        inner_frame = tk.Frame(area, bg=GameConfig.CARD_COLOR)
-        inner_frame.place(relx=0.5, rely=0.1, anchor="n")
+        # Frame interno centrado
+        inner = tk.Frame(area, bg=area.cget("bg"))
+        inner.place(relx=0.5, rely=0.1, anchor="n")
         
         cols_visual = 2
         for i in range(cantidad):
             row = i // cols_visual
             col = i % cols_visual
             
-            lbl = tk.Label(inner_frame, image=img_pelota, bg=GameConfig.CARD_COLOR)
+            lbl = tk.Label(inner, image=img_pelota, bg=area.cget("bg"))
             lbl.image = img_pelota
-            lbl.grid(row=row, column=col, padx=2, pady=2)
+            lbl.grid(row=row, column=col, padx=2, pady=5)
 
     # --- LÓGICA ARRASTRE ---
     def start_drag(self, event):
@@ -213,55 +235,70 @@ class MathDragGameLevel4:
         if widget.bloqueado: return
         widget.lift()
         self.drag_data["item"] = widget
+        # Guardar offset para que no "salte" al hacer clic
+        self.drag_data["offset_x"] = event.x
+        self.drag_data["offset_y"] = event.y
 
     def do_drag(self, event):
         widget = self.drag_data["item"]
         if not widget: return
         
-        mx = self.content_frame.winfo_pointerx() - self.content_frame.winfo_rootx()
-        my = self.content_frame.winfo_pointery() - self.content_frame.winfo_rooty()
+        # Cálculo preciso usando coordenadas globales
+        x_root = event.x_root
+        y_root = event.y_root
         
-        # Centrar en el mouse
-        widget.place(x=mx - (widget.winfo_width()//2), y=my - (widget.winfo_height()//2))
+        frame_x = self.content_frame.winfo_rootx()
+        frame_y = self.content_frame.winfo_rooty()
+        
+        new_x = x_root - frame_x - self.drag_data["offset_x"]
+        new_y = y_root - frame_y - self.drag_data["offset_y"]
+        
+        widget.place(x=new_x, y=new_y)
 
     def end_drag(self, event):
         widget = self.drag_data["item"]
         self.drag_data["item"] = None
         if not widget: return
 
+        # Centro de la ficha soltada
         drop_x = widget.winfo_rootx() + (widget.winfo_width() // 2)
         drop_y = widget.winfo_rooty() + (widget.winfo_height() // 2)
 
         encontrado = False
-        # Verificar colisión con los 4 slots de arriba
+        
+        # Verificar si cayó en alguno de los 4 slots
         for i, target in enumerate(self.target_widgets):
-            if self.slots_filled[i]: continue
+            if self.slots_filled[i]: continue # Si ya está lleno, saltar
             
-            tx1 = target.winfo_rootx()
-            ty1 = target.winfo_rooty()
-            tx2 = tx1 + target.winfo_width()
-            ty2 = ty1 + target.winfo_height()
+            tx = target.winfo_rootx()
+            ty = target.winfo_rooty()
+            tw = target.winfo_width()
+            th = target.winfo_height()
             
-            if tx1 < drop_x < tx2 and ty1 < drop_y < ty2:
+            # Colisión
+            if tx < drop_x < tx + tw and ty < drop_y < ty + th:
+                # Validar si es el número correcto para esa columna
                 if widget.valor == self.target_values[i]:
-                    # Correcto
-                    final_x = tx1 - self.content_frame.winfo_rootx()
-                    final_y = ty1 - self.content_frame.winfo_rooty()
+                    # Posicionar exacto
+                    final_x = tx - self.content_frame.winfo_rootx()
+                    final_y = ty - self.content_frame.winfo_rooty()
                     
-                    # Ajuste fino para centrar
-                    ox = (target.winfo_width() - widget.winfo_width()) // 2
-                    oy = (target.winfo_height() - widget.winfo_height()) // 2
+                    # Centrar
+                    ox = (tw - widget.winfo_width()) // 2
+                    oy = (th - widget.winfo_height()) // 2
                     
                     widget.place(x=final_x + ox, y=final_y + oy)
                     widget.bloqueado = True
                     self.slots_filled[i] = True
                     encontrado = True
                     
+                    # Verificar victoria
                     if all(self.slots_filled):
                         self.master.after(300, self.game_win)
                     break
         
         if not encontrado:
+            # Volver a posición original
             widget.place(x=widget.home_x, y=widget.home_y)
 
     def game_win(self):
@@ -284,9 +321,8 @@ class MathDragGameLevel4:
         btn.pack(pady=20)
         btn.bind("<Button-1>", lambda e: [win.destroy(), self._start_new_round()])
 
-    # --- GENERADORES DE IMÁGENES ---
+    # --- GENERADORES GRÁFICOS ---
     def crear_imagen_numero(self, numero):
-        """Crea la ficha cuadrada con el número"""
         s = self.box_size
         img = Image.new("RGB", (s, s), "white")
         draw = ImageDraw.Draw(img)
@@ -306,12 +342,15 @@ class MathDragGameLevel4:
         return ImageTk.PhotoImage(img)
 
     def crear_imagen_slot_vacio(self):
-        """Crea el cuadrado vacío de arriba donde se suelta la ficha"""
         s = self.box_size
         img = Image.new("RGB", (s, s), "white") 
         draw = ImageDraw.Draw(img)
-        # Borde verde para indicar que ahí va una ficha
-        draw.rectangle([0, 0, s-1, s-1], outline=GameConfig.MAIN_COLOR, width=2)
+        # Borde punteado simulado o gris
+        draw.rectangle([0, 0, s-1, s-1], outline="#BDBDBD", width=2)
+        try:
+            f = ImageFont.truetype("arial.ttf", int(s*0.4))
+            draw.text((s//3, s//4), "?", fill="#E0E0E0", font=f)
+        except: pass
         return ImageTk.PhotoImage(img)
 
     def crear_imagen_pelota(self, tipo):
@@ -321,19 +360,13 @@ class MathDragGameLevel4:
         
         # Búsqueda de archivos
         item_img = None
-        posibles = [f"{tipo}.png", f"balon_{tipo}.png", f"{tipo}.jpg"]
-        rutas = []
-        for p in posibles:
-            rutas.append(p)
-            rutas.append(os.path.join("imagenes", p))
-            rutas.append(os.path.join("assets", p))
-            rutas.append(os.path.join("..", "nivel3", p)) # Buscar en Nivel 3
-            rutas.append(os.path.join("..", "nivel2", p))
+        posibles = [tipo, os.path.join("..", "nivel3", tipo)] # Busca en nivel 3 las pelotas
         
-        for r in rutas:
-            if os.path.exists(r):
+        for p in posibles:
+            full_p = os.path.join(SCRIPT_DIR, p)
+            if os.path.exists(full_p):
                 try:
-                    item_img = Image.open(r).convert("RGBA")
+                    item_img = Image.open(full_p).convert("RGBA")
                     break
                 except: pass
 
@@ -341,31 +374,37 @@ class MathDragGameLevel4:
             img_res = item_img.resize((s, s), Image.Resampling.LANCZOS)
             return ImageTk.PhotoImage(img_res)
         else:
-            # Fallback Dibujo (Por si no encuentra las imagenes)
+            # Fallback Dibujos
             draw.ellipse([2, 2, s-2, s-2], outline="black", width=2)
             if "futbol" in tipo:
                 draw.ellipse([2, 2, s-2, s-2], fill="white", outline="black")
-                draw.regular_polygon((s/2, s/2, s/6), 6, rotation=0, fill="black")
+                draw.ellipse([s*0.4, s*0.4, s*0.6, s*0.6], fill="black") # Simple spot
             elif "basquet" in tipo:
-                draw.ellipse([2, 2, s-2, s-2], fill="#FF8C00", outline="black")
+                draw.ellipse([2, 2, s-2, s-2], fill="#FF9800", outline="black")
                 draw.line([s/2, 2, s/2, s-2], fill="black", width=2)
             elif "tenis" in tipo:
                 draw.ellipse([2, 2, s-2, s-2], fill="#CCFF00", outline="black")
                 draw.arc([s*0.2, -s*0.2, s*1.2, s*0.8], 140, 240, fill="white", width=2)
             elif "voley" in tipo:
-                draw.ellipse([2, 2, s-2, s-2], fill="#FFD700", outline="black")
-                draw.chord([2, 2, s-2, s-2], 30, 150, fill="#0055A4", outline="black")
+                # Voley Amarillo y Azul
+                draw.ellipse([2, 2, s-2, s-2], fill="#FFEB3B", outline="black")
+                draw.chord([2, 2, s-2, s-2], 120, 240, fill="#0055A4", outline="black")
+                draw.chord([2, 2, s-2, s-2], 300, 60, fill="#0055A4", outline="black")
             
             return ImageTk.PhotoImage(img)
 
     def volver_al_menu(self, event=None):
-        ruta_actual = os.path.dirname(os.path.abspath(__file__))
-        ruta_menu = os.path.join(ruta_actual, "..", "menu", "menumatematicas.py")
-        if os.path.exists(ruta_menu):
+        path = os.path.join(SCRIPT_DIR, "..", "menu", "menumatematicas.py")
+        path = os.path.normpath(path)
+        
+        if os.path.exists(path):
             self.master.destroy()
-            subprocess.Popen([sys.executable, ruta_menu])
+            if SYSTEM_OS == "Windows":
+                subprocess.Popen([sys.executable, path], creationflags=subprocess.DETACHED_PROCESS)
+            else:
+                subprocess.Popen([sys.executable, path])
         else:
-            messagebox.showerror("Error", f"No se encontró el menú: {ruta_menu}")
+            messagebox.showerror("Error", f"Menú no encontrado en:\n{path}")
 
 if __name__ == "__main__":
     root = tk.Tk()

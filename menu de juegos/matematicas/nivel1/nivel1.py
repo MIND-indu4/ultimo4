@@ -5,26 +5,30 @@ import random
 import os
 import sys
 import subprocess
+import platform
 
-# --- CONFIGURACIÓN ---
+# ========== CONFIGURACIÓN DE SISTEMA ==========
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SYSTEM_OS = platform.system()
+
+def get_system_font():
+    return "Arial" if SYSTEM_OS == "Windows" else "DejaVu Sans"
+
+SYSTEM_FONT = get_system_font()
+
+# --- CONFIGURACIÓN VISUAL ---
 class GameConfig:
-    MAIN_COLOR = "#4CAF50"       # Verde vibrante
+    MAIN_COLOR = "#00C853"       # Verde del menú
     HOVER_COLOR = "#66BB6A"
     TEXT_DARK = "#212121"
     CARD_COLOR = "white"
     
-    # Nombres de tus imágenes
+    # Nombres de tus imágenes (Deben estar en la misma carpeta)
     IMAGENES = [
-        "manzana.png", 
-        "pera.jpg", 
-        "banana.png", 
-        "frutilla.png", 
-        "naranja.png",
-        "limon.png",
-        "piña.png",
-        "sandia.png"
+        "manzana.png", "pera.png", "banana.png", 
+        "frutilla.png", "naranja.png", "limon.png",
+        "piña.png", "sandia.png"
     ]
-
 
 # --- FUNCIONES AUXILIARES ---
 def create_rounded_rectangle(canvas, x1, y1, x2, y2, radius, **kwargs):
@@ -37,8 +41,14 @@ class MathDragGame:
     def __init__(self, master):
         self.master = master
         master.title("Matemáticas - Nivel 1")
-        master.attributes("-fullscreen", True)
+        
+        if SYSTEM_OS == "Windows":
+            master.attributes("-fullscreen", True)
+        else:
+            master.attributes("-fullscreen", True)
+            
         master.configure(bg=GameConfig.MAIN_COLOR)
+        master.bind("<Escape>", self.volver_al_menu)
 
         # Escala dinámica
         screen_width = master.winfo_screenwidth()
@@ -48,9 +58,9 @@ class MathDragGame:
         self.scale = min(screen_width / base_width, screen_height / base_height)
 
         # Fuentes y Tamaños
-        self.font_title = ("Arial", int(32 * self.scale), "bold")
-        self.font_signos = ("Arial", int(50 * self.scale), "bold")
-        self.font_btn = ("Arial", int(14 * self.scale), "bold")
+        self.font_title = (SYSTEM_FONT, int(32 * self.scale), "bold")
+        self.font_signos = (SYSTEM_FONT, int(50 * self.scale), "bold")
+        self.font_btn = (SYSTEM_FONT, int(14 * self.scale), "bold")
         
         self.box_size = int(130 * self.scale)
         
@@ -68,15 +78,11 @@ class MathDragGame:
         sw = self.master.winfo_screenwidth()
         sh = self.master.winfo_screenheight()
         
-        # Calculamos el ancho de la tarjeta (85% de la pantalla)
         cw = int(sw * 0.85)
         ch = int(sh * 0.85)
         cx = sw // 2
         cy = sh // 2
         
-        # --- CORRECCIÓN DE CENTRADO ---
-        # Guardamos el ancho real disponible para el contenido (ancho tarjeta - padding)
-        # Esto asegura que el cálculo sea exacto desde el milisegundo 0.
         self.ancho_real_frame = cw - 40 
 
         # Dibujar fondo blanco redondeado
@@ -87,10 +93,10 @@ class MathDragGame:
         self.content_frame.place(x=cx - cw//2 + 20, y=cy - ch//2 + 20, width=self.ancho_real_frame, height=ch-40)
 
         # Botón Menú
-        self.btn_menu = tk.Label(self.content_frame, text="Menú", font=self.font_btn, 
+        self.btn_menu = tk.Label(self.content_frame, text="⬅ Menú", font=self.font_btn, 
                                    bg=GameConfig.MAIN_COLOR, fg="white", padx=15, pady=8, cursor="hand2")
         self.btn_menu.place(x=10, y=10)
-        self.btn_menu.bind("<Button-1>", self.volver_al_menu)
+        self.btn_menu.bind("<Button-1>", lambda e: self.volver_al_menu())
         
         # Título
         tk.Label(self.content_frame, text="Arrastra la respuesta correcta", font=self.font_title, 
@@ -155,16 +161,12 @@ class MathDragGame:
         random.shuffle(opciones)
 
         # 4. Crear Fichas
-        # --- CORRECCIÓN: Usamos el ancho calculado matemáticamente, no el del widget ---
         frame_w = self.ancho_real_frame 
         
-        # Posición Y en la parte inferior
         y_pos = self.content_frame.winfo_height() - int(180 * self.scale)
-        # Si es la primera vez y height da 1, usamos un estimado
         if y_pos < 0: 
             y_pos = int(self.master.winfo_screenheight() * 0.85) - int(220 * self.scale)
 
-        # Dividimos el ancho total en 4 zonas exactas
         zona_width = frame_w // 4
         
         for i, op in enumerate(opciones):
@@ -175,10 +177,6 @@ class MathDragGame:
             lbl.es_correcta = op["correcta"]
             lbl.es_opcion_juego = True
             
-            # Cálculo de centro exacto
-            # (i * ancho_zona) nos lleva al inicio de la zona
-            # + (ancho_zona // 2) nos lleva al centro de la zona
-            # - (tamaño_caja // 2) retrocede la mitad de la imagen para que quede centrada
             x_pos = (i * zona_width) + (zona_width // 2) - (self.box_size // 2)
             
             lbl.place(x=x_pos, y=y_pos)
@@ -250,10 +248,10 @@ class MathDragGame:
         win.attributes("-topmost", True)
 
         tk.Frame(win, bg=GameConfig.MAIN_COLOR, height=15).pack(fill="x")
-        tk.Label(win, text="¡Correcto!", font=("Arial", 26, "bold"), bg="white", fg=GameConfig.MAIN_COLOR).pack(pady=(30, 10))
-        tk.Label(win, text="¡Excelente trabajo! 🎉", font=("Arial", 14), bg="white", fg="#555").pack(pady=10)
+        tk.Label(win, text="¡Correcto!", font=(SYSTEM_FONT, 26, "bold"), bg="white", fg=GameConfig.MAIN_COLOR).pack(pady=(30, 10))
+        tk.Label(win, text="¡Excelente trabajo! 🎉", font=(SYSTEM_FONT, 14), bg="white", fg="#555").pack(pady=10)
         
-        btn = tk.Label(win, text="Siguiente Nivel", font=("Arial", 14, "bold"),
+        btn = tk.Label(win, text="Siguiente Nivel", font=(SYSTEM_FONT, 14, "bold"),
                        bg=GameConfig.MAIN_COLOR, fg="white", padx=20, pady=10, cursor="hand2")
         btn.pack(pady=20)
         
@@ -271,19 +269,18 @@ class MathDragGame:
         draw.rectangle([0, 0, s-1, s-1], outline="black" if is_option else GameConfig.TEXT_DARK, width=2)
 
         item_img = None
-        rutas = [nombre_archivo, os.path.join("imagenes", nombre_archivo), os.path.join("assets", nombre_archivo)]
-        for r in rutas:
-            if os.path.exists(r):
-                try:
-                    item_img = Image.open(r).convert("RGBA")
-                    break
-                except: pass
+        # Busca la imagen en la carpeta actual
+        ruta = os.path.join(SCRIPT_DIR, nombre_archivo)
+        
+        if os.path.exists(ruta):
+            try:
+                item_img = Image.open(ruta).convert("RGBA")
+            except: pass
 
         cols = 2
         if cantidad > 4: cols = 3
         if cantidad > 6: cols = 3 
         
-        rows = (cantidad + cols - 1) // cols
         cell_w = s // cols
         cell_h = s // ((cantidad + cols - 1) // cols) if cantidad > 2 else s // 2
         if cell_h > s // 2: cell_h = s // 2
@@ -311,7 +308,8 @@ class MathDragGame:
                 off_y = (th - new_h)//2
                 canvas_img.paste(img_res, (x+off_x, y+off_y), img_res)
             else:
-                draw.ellipse([x, y, x+tw, y+th], fill=GameConfig.MAIN_COLOR, outline="black")
+                # Si no encuentra la imagen, dibuja círculos rojos (como en tu diseño de iconos)
+                draw.ellipse([x, y, x+tw, y+th], fill="red", outline="black")
 
         return ImageTk.PhotoImage(canvas_img)
 
@@ -321,23 +319,30 @@ class MathDragGame:
         draw = ImageDraw.Draw(img)
         draw.rectangle([0, 0, s-1, s-1], outline="#9E9E9E", width=2)
         try:
-            font = ImageFont.truetype("arial.ttf", int(s/2))
+            # Intenta usar Arial si está disponible
+            font_name = "arial.ttf" if SYSTEM_OS == "Windows" else "DejaVuSans.ttf"
+            font = ImageFont.truetype(font_name, int(s/2))
             bbox = draw.textbbox((0, 0), "?", font=font)
             w, h = bbox[2]-bbox[0], bbox[3]-bbox[1]
             draw.text(((s-w)/2, (s-h)/2 - 10), "?", fill="#9E9E9E", font=font)
         except:
+            # Fallback simple
             draw.text((s//3, s//4), "?", fill="#9E9E9E")
         return ImageTk.PhotoImage(img)
 
     def volver_al_menu(self, event=None):
-        ruta_actual = os.path.dirname(os.path.abspath(__file__))
-        ruta_menu = os.path.join(ruta_actual, "..", "menu", "menumatematicas.py")
+        # Busca el menú: .../matematicas/menu/menumatematicas.py
+        path = os.path.join(SCRIPT_DIR, "..", "menu", "menumatematicas.py")
+        path = os.path.normpath(path)
         
-        if os.path.exists(ruta_menu):
+        if os.path.exists(path):
             self.master.destroy()
-            subprocess.Popen([sys.executable, ruta_menu])
+            if SYSTEM_OS == "Windows":
+                subprocess.Popen([sys.executable, path], creationflags=subprocess.DETACHED_PROCESS)
+            else:
+                subprocess.Popen([sys.executable, path])
         else:
-            messagebox.showerror("Error", f"No se encontró el archivo del menú en:\n{ruta_menu}")
+            messagebox.showerror("Error", f"No se encontró el menú en:\n{path}")
 
 if __name__ == "__main__":
     root = tk.Tk()

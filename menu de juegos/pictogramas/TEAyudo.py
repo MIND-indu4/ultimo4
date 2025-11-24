@@ -2,11 +2,23 @@ import tkinter as tk
 from tkinter import messagebox
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 import os
+import sys
+import subprocess
 import threading
 import pygame.mixer
 from gtts import gTTS
+import platform 
 
-# --- CONFIGURACIÓN ---
+# ========== CONFIGURACIÓN DEL SISTEMA ==========
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SYSTEM_OS = platform.system()
+
+def get_system_font():
+    return "Arial" if SYSTEM_OS == "Windows" else "DejaVu Sans"
+
+SYSTEM_FONT = get_system_font()
+
+# --- CONFIGURACIÓN VISUAL ---
 class Config:
     BG_COLOR = "#FFFDE7"       
     HEADER_BG = "#FBC02D"      
@@ -32,15 +44,24 @@ class TEAyudoApp:
     def __init__(self, root):
         self.root = root
         self.root.title("TEAyudo - Comunicador Completo")
-        self.root.state("zoomed") 
+        
+        # --- PANTALLA COMPLETA / MAXIMIZADA ---
+        if SYSTEM_OS == "Windows":
+            self.root.state("zoomed")
+        else:
+            self.root.attributes("-fullscreen", True)
+            # Escape para salir de pantalla completa
+            self.root.bind("<Escape>", lambda e: self.root.attributes("-fullscreen", False))
+
         self.root.configure(bg=Config.BG_COLOR)
 
+        # --- AUDIO ---
         try:
-            pygame.mixer.init()
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
         except Exception as e:
             print(f"Error audio: {e}")
 
-        self.current_dir = os.path.dirname(os.path.abspath(__file__))
+        self.current_dir = SCRIPT_DIR
         self.audio_dir = os.path.join(self.current_dir, Config.CARPETA_AUDIO)
         if not os.path.exists(self.audio_dir):
             os.makedirs(self.audio_dir)
@@ -50,48 +71,42 @@ class TEAyudoApp:
         # --- BASE DE DATOS COMPLETA ---
         self.DATA = {
             "root": [
-                # --- FILA 1: COMUNICACIÓN BÁSICA (NUEVO) ---
+                # FILA 1
                 {"tipo": "folder", "label": "Social",    "id": "social",    "color": "#FFCCBC", "emoji": "👋"},
                 {"tipo": "folder", "label": "Preguntas", "id": "preguntas", "color": "#B2EBF2", "emoji": "❓"},
                 {"tipo": "folder", "label": "Emociones", "id": "emociones", "color": "#F48FB1", "emoji": "🙂"},
                 {"tipo": "folder", "label": "Acciones",  "id": "acciones",  "color": "#AED581", "emoji": "🏃"},
                 {"tipo": "item",   "label": "Yo",        "text": "Yo quiero", "color": "#E1BEE7", "emoji": "🙋"},
-
-                # --- FILA 2: NECESIDADES ---
+                # FILA 2
                 {"tipo": "folder", "label": "Comida",    "id": "comida",    "color": Config.FOLDER_COLOR, "emoji": "🍽️"},
                 {"tipo": "folder", "label": "Bebida",    "id": "bebida",    "color": "#81D4FA", "emoji": "🥤"},
                 {"tipo": "folder", "label": "Higiene",   "id": "higiene",   "color": "#80DEEA", "emoji": "🧼"},
                 {"tipo": "folder", "label": "Ropa",      "id": "ropa",      "color": "#CE93D8", "emoji": "👕"},
                 {"tipo": "folder", "label": "Salud",     "id": "salud",     "color": "#EF9A9A", "emoji": "🏥"},
-                
-                # --- FILA 3: ENTORNO ---
+                # FILA 3
                 {"tipo": "folder", "label": "Lugares",   "id": "lugares",   "color": "#BCAAA4", "emoji": "🏠"},
                 {"tipo": "folder", "label": "Escuela",   "id": "escuela",   "color": "#FFF59D", "emoji": "🏫"},
-                {"tipo": "folder", "label": "Cocina",    "id": "cocina",    "color": "#B0BEC5", "emoji": "🍴"}, # Nuevo
-                {"tipo": "folder", "label": "Tecnología","id": "tecnologia","color": "#90CAF9", "emoji": "📱"}, # Nuevo
+                {"tipo": "folder", "label": "Cocina",    "id": "cocina",    "color": "#B0BEC5", "emoji": "🍴"},
+                {"tipo": "folder", "label": "Tecnología","id": "tecnologia","color": "#90CAF9", "emoji": "📱"},
                 {"tipo": "folder", "label": "Transporte","id": "transporte","color": "#CFD8DC", "emoji": "🚗"},
-
-                # --- FILA 4: PERSONAS Y SERES ---
+                # FILA 4
                 {"tipo": "folder", "label": "Personas",  "id": "personas",  "color": "#FFAB91", "emoji": "👥"},
                 {"tipo": "folder", "label": "Cuerpo",    "id": "cuerpo",    "color": "#FFCCBC", "emoji": "👃"},
                 {"tipo": "folder", "label": "Animales",  "id": "animales",  "color": "#D7CCC8", "emoji": "🐾"},
                 {"tipo": "folder", "label": "Tiempo",    "id": "tiempo",    "color": "#9FA8DA", "emoji": "⏰"},
                 {"tipo": "folder", "label": "Juguetes",  "id": "juguetes",  "color": "#F48FB1", "emoji": "🧸"},
-
-                # --- FILA 5: CONCEPTOS ---
-                {"tipo": "folder", "label": "Deportes",  "id": "deportes",  "color": "#C5E1A5", "emoji": "⚽"}, # Nuevo
+                # FILA 5
+                {"tipo": "folder", "label": "Deportes",  "id": "deportes",  "color": "#C5E1A5", "emoji": "⚽"},
                 {"tipo": "folder", "label": "Colores",   "id": "colores",   "color": "#FFFFFF", "emoji": "🎨"},
                 {"tipo": "folder", "label": "Describir", "id": "descriptivos", "color": "#E0E0E0", "emoji": "📏"},
                 {"tipo": "folder", "label": "Formas",    "id": "formas",    "color": "#EEEEEE", "emoji": "🔺"},
-                
-                # --- FILA 6: RESPUESTAS RÁPIDAS ---
+                # FILA 6
                 {"tipo": "item", "label": "Sí", "text": "Sí", "color": "#C8E6C9", "emoji": "👍"},
                 {"tipo": "item", "label": "No", "text": "No", "color": "#FFCDD2", "emoji": "👎"},
                 {"tipo": "item", "label": "Ayuda", "text": "Ayuda por favor", "color": "#FFF176", "emoji": "🆘"},
                 {"tipo": "item", "label": "Baño", "text": "Quiero ir al baño", "img": "baño.png", "ruta": "acciones"},
             ],
-
-            # --- CATEGORÍAS NUEVAS (INSPIRADAS EN CBOARD) ---
+            # --- CATEGORÍAS ---
             "social": [
                 {"tipo": "item", "label": "Hola", "img": "hola.png", "ruta": "social"},
                 {"tipo": "item", "label": "Adiós", "img": "adios.png", "ruta": "social"},
@@ -149,8 +164,6 @@ class TEAyudoApp:
                 {"tipo": "item", "label": "Ganar", "img": "ganar.png", "ruta": "deportes"},
                 {"tipo": "item", "label": "Perder", "img": "perder.png", "ruta": "deportes"},
             ],
-
-            # --- TUS CATEGORÍAS ORIGINALES (MANTENIDAS) ---
             "comida": [
                 {"tipo": "folder", "label": "Frutas", "id": "frutas", "color": "#FFE0B2"},
                 {"tipo": "folder", "label": "Verduras", "id": "verduras", "color": "#C5E1A5"},
@@ -414,98 +427,131 @@ class TEAyudoApp:
         self.left_nav = tk.Frame(self.nav_frame, bg=Config.HEADER_BG)
         self.left_nav.pack(side="left", padx=10)
 
-        self.btn_back = tk.Button(self.left_nav, text="⬅ ATRÁS", font=("Segoe UI", 12, "bold"),
+        # Botón Atrás (Navegación interna)
+        self.btn_back = tk.Button(self.left_nav, text="⬅ ATRÁS", font=(SYSTEM_FONT, 12, "bold"),
                                   bg=Config.BTN_BACK_BG, fg=Config.TEXT_COLOR, 
                                   activebackground="#FFF9C4", activeforeground=Config.TEXT_COLOR,
-                                  command=self.ir_atras, relief="flat", bd=0, padx=20, pady=10)
+                                  command=self.ir_atras_carpeta, relief="flat", bd=0, padx=20, pady=10)
         self.btn_back.pack(side="left", padx=5)
         
-        # Botón Inicio
-        self.btn_home = tk.Button(self.left_nav, text="🏠 INICIO", font=("Segoe UI", 12, "bold"),
+        # Botón Inicio (Navegación interna)
+        self.btn_home = tk.Button(self.left_nav, text="🏠 INICIO", font=(SYSTEM_FONT, 12, "bold"),
                                   bg=Config.BTN_BACK_BG, fg=Config.TEXT_COLOR, 
                                   activebackground="#FFF9C4", activeforeground=Config.TEXT_COLOR,
-                                  command=self.ir_inicio, relief="flat", bd=0, padx=20, pady=10)
+                                  command=self.ir_inicio_carpeta, relief="flat", bd=0, padx=20, pady=10)
         self.btn_home.pack(side="left", padx=5)
         
-        # Título carpeta
-        self.lbl_path = tk.Label(self.nav_frame, text="INICIO", font=("Segoe UI", 20, "bold"),
+        # Título carpeta actual
+        self.lbl_path = tk.Label(self.nav_frame, text="INICIO", font=(SYSTEM_FONT, 20, "bold"),
                                  bg=Config.HEADER_BG, fg=Config.TEXT_COLOR)
         self.lbl_path.pack(side="left", padx=20)
+
+        # --- NUEVO: BOTÓN SALIR AL MENÚ PRINCIPAL (Derecha) ---
+        self.right_nav = tk.Frame(self.nav_frame, bg=Config.HEADER_BG)
+        self.right_nav.pack(side="right", padx=10)
+
+        self.btn_exit = tk.Button(self.right_nav, text="🚪 SALIR", font=(SYSTEM_FONT, 12, "bold"),
+                                  bg="#FF5252", fg="white", # Rojo para destacar
+                                  activebackground="#D32F2F", activeforeground="white",
+                                  command=self.volver_al_menu_principal, relief="flat", bd=0, padx=20, pady=10)
+        self.btn_exit.pack(side="right", padx=5)
 
         # --- BARRA DE FRASE ---
         self.frame_frase = tk.Frame(self.root, bg="white", height=130, bd=2, relief="solid")
         self.frame_frase.pack(fill="x", padx=20, pady=10)
         self.frame_frase.pack_propagate(False)
 
-        # Contenedor Pictogramas Frase
         self.frase_container = tk.Frame(self.frame_frase, bg="white")
         self.frase_container.pack(side="left", fill="y", padx=10)
 
-        # Botones Acciones (Derecha)
         self.actions_frame = tk.Frame(self.frame_frase, bg="white")
         self.actions_frame.pack(side="right", padx=10)
 
-        btn_play = tk.Button(self.actions_frame, text="▶️ LEER", font=("Segoe UI", 12, "bold"),
+        btn_play = tk.Button(self.actions_frame, text="▶️ LEER", font=(SYSTEM_FONT, 12, "bold"),
                              bg="#81C784", fg="white", relief="flat", command=self.leer_frase_completa)
         btn_play.pack(side="left", padx=5)
 
-        btn_del = tk.Button(self.actions_frame, text="⌫", font=("Segoe UI", 14, "bold"),
+        btn_del = tk.Button(self.actions_frame, text="⌫", font=(SYSTEM_FONT, 14, "bold"),
                             bg="#E57373", fg="white", relief="flat", command=self.borrar_ultimo)
         btn_del.pack(side="left", padx=5)
 
-        btn_clear = tk.Button(self.actions_frame, text="🗑️", font=("Segoe UI", 14, "bold"),
+        btn_clear = tk.Button(self.actions_frame, text="🗑️", font=(SYSTEM_FONT, 14, "bold"),
                               bg="#D32F2F", fg="white", relief="flat", command=self.limpiar_frase)
         btn_clear.pack(side="left", padx=5)
 
-        # --- ÁREA DE SCROLL PARA CONTENIDO ---
-        # Marco contenedor para el Canvas y Scrollbar
+        # --- ÁREA DE CONTENIDO (SCROLL) ---
         self.main_container = tk.Frame(self.root, bg=Config.BG_COLOR)
         self.main_container.pack(fill="both", expand=True, padx=20, pady=10)
 
-        # Scrollbar
         self.scrollbar = tk.Scrollbar(self.main_container, orient="vertical")
         self.scrollbar.pack(side="right", fill="y")
 
-        # Canvas
         self.canvas = tk.Canvas(self.main_container, bg=Config.BG_COLOR, highlightthickness=0,
                                 yscrollcommand=self.scrollbar.set)
         self.canvas.pack(side="left", fill="both", expand=True)
         
-        # Vincular scrollbar al canvas
         self.scrollbar.config(command=self.canvas.yview)
-
-        # Frame interno (donde van los botones)
         self.container = tk.Frame(self.canvas, bg=Config.BG_COLOR)
-        
-        # Crear ventana dentro del canvas
         self.canvas_window = self.canvas.create_window((0,0), window=self.container, anchor="n")
 
-        # Eventos para el scroll
         self.container.bind("<Configure>", self.on_frame_configure)
         self.canvas.bind("<Configure>", self.on_canvas_configure)
         
-        # Bind MouseWheel
-        self.root.bind_all("<MouseWheel>", self._on_mousewheel)
+        # Scroll Mouse
+        if SYSTEM_OS == "Windows":
+            self.root.bind_all("<MouseWheel>", self._on_mousewheel)
+        else:
+            self.root.bind_all("<Button-4>", self._on_mousewheel)
+            self.root.bind_all("<Button-5>", self._on_mousewheel)
 
+    # --- FUNCIONALIDAD DE NAVEGACIÓN ENTRE MENÚS ---
+    def volver_al_menu_principal(self):
+        """Cierra TEAyudo y vuelve al menú de juegos"""
+        self.root.destroy()
+        try:
+            # Asumimos estructura: .../menu de juegos/pictogramas/TEAyudo.py
+            # Queremos ir a:       .../menu de juegos/menu_de_juegos.py
+            
+            # Subir un nivel (desde 'pictogramas' a 'menu de juegos')
+            path_to_menu = os.path.join(SCRIPT_DIR, "..", "menu_de_juegos.py")
+            path_to_menu = os.path.normpath(path_to_menu) # Normaliza la ruta
+
+            if not os.path.exists(path_to_menu):
+                # Intento alternativo: quizás TEAyudo está en la misma carpeta que el menú
+                path_to_menu = os.path.join(SCRIPT_DIR, "menu_de_juegos.py")
+
+            if os.path.exists(path_to_menu):
+                if SYSTEM_OS == "Windows":
+                    subprocess.Popen([sys.executable, path_to_menu], creationflags=subprocess.DETACHED_PROCESS)
+                else:
+                    subprocess.Popen([sys.executable, path_to_menu])
+            else:
+                messagebox.showerror("Error", f"No se encuentra el menú principal en:\n{path_to_menu}")
+        except Exception as e:
+            print(f"Error al volver al menú: {e}")
+
+    # --- EVENTOS SCROLL ---
     def on_frame_configure(self, event):
-        # Actualizar región de scroll
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
     def on_canvas_configure(self, event):
-        # Ajustar ancho del frame interno al ancho del canvas
         self.canvas.itemconfig(self.canvas_window, width=event.width)
 
     def _on_mousewheel(self, event):
-        # Scroll con la rueda
-        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        if SYSTEM_OS == "Windows":
+            self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        else:
+            if event.num == 4: self.canvas.yview_scroll(-1, "units")
+            elif event.num == 5: self.canvas.yview_scroll(1, "units")
 
+    # --- LÓGICA PICTOGRAMAS ---
     def cargar_vista(self, folder_id):
-        # Limpiar frame interno
         for widget in self.container.winfo_children():
             widget.destroy()
             
         items = self.DATA.get(folder_id, [])
         
+        # Lógica del botón Atrás (Navegación interna)
         if len(self.history) > 1:
             self.btn_back.config(state="normal", bg=Config.BTN_BACK_BG, cursor="hand2")
         else:
@@ -514,25 +560,19 @@ class TEAyudoApp:
         titulo = "INICIO" if folder_id == "root" else folder_id.upper()
         self.lbl_path.config(text=titulo)
 
-        # Grid con peso para centrado
         for i in range(Config.GRID_COLS):
             self.container.columnconfigure(i, weight=1)
 
         row, col = 0, 0
         for item in items:
-            # Frame del botón
             frame_btn = tk.Frame(self.container, bg=Config.BG_COLOR)
-            frame_btn.grid(row=row, column=col, padx=10, pady=15, sticky="n") # Sticky North para alinear arriba
+            frame_btn.grid(row=row, column=col, padx=10, pady=15, sticky="n")
             
             img_name = item.get("img", None)
             ruta_rel = item.get("ruta", "")
             emoji = item.get("emoji", None)
             es_carpeta = (item["tipo"] == "folder")
-            
-            if "color" in item:
-                color_bg = item["color"]
-            else:
-                color_bg = Config.FOLDER_COLOR if es_carpeta else Config.ITEM_COLOR
+            color_bg = item.get("color", Config.FOLDER_COLOR if es_carpeta else Config.ITEM_COLOR)
             
             photo = self.generar_icono(item["label"], color_bg, es_carpeta, img_name, ruta_rel, emoji)
             
@@ -543,7 +583,7 @@ class TEAyudoApp:
             btn.image = photo 
             btn.pack()
             
-            lbl = tk.Label(frame_btn, text=item["label"], font=("Segoe UI", 13, "bold"), 
+            lbl = tk.Label(frame_btn, text=item["label"], font=(SYSTEM_FONT, 13, "bold"), 
                            bg=Config.BG_COLOR, fg=Config.TEXT_COLOR)
             lbl.pack(pady=5)
             
@@ -551,7 +591,6 @@ class TEAyudoApp:
             if col >= Config.GRID_COLS:
                 col = 0; row += 1
         
-        # Resetear scroll al cambiar vista
         self.canvas.yview_moveto(0)
 
     def al_pulsar(self, item):
@@ -567,7 +606,6 @@ class TEAyudoApp:
             texto = item.get("text", item.get("label"))
             self.reproducir_audio(texto)
 
-    # --- FUNCIONES BARRA FRASE ---
     def agregar_a_frase(self, item):
         self.frase_actual.append(item)
         self.dibujar_frase()
@@ -608,15 +646,15 @@ class TEAyudoApp:
             lbl_img.image = photo
             lbl_img.pack()
             
-            lbl_txt = tk.Label(frame, text=label, font=("Segoe UI", 10), bg="white")
+            lbl_txt = tk.Label(frame, text=label, font=(SYSTEM_FONT, 10), bg="white")
             lbl_txt.pack()
 
-    def ir_atras(self):
+    def ir_atras_carpeta(self):
         if len(self.history) > 1:
             self.history.pop()
             self.cargar_vista(self.history[-1])
 
-    def ir_inicio(self):
+    def ir_inicio_carpeta(self):
         self.history = ["root"]
         self.cargar_vista("root")
 
@@ -659,8 +697,8 @@ class TEAyudoApp:
 
         img_cargada = False
         if nombre_archivo:
-            base_path = os.path.dirname(os.path.abspath(__file__))
-            ruta_completa = os.path.join(base_path, Config.CARPETA_IMG, ruta_relativa, nombre_archivo)
+            parts = ruta_relativa.split("/") if "/" in ruta_relativa else [ruta_relativa]
+            ruta_completa = os.path.join(SCRIPT_DIR, Config.CARPETA_IMG, *parts, nombre_archivo)
             
             if os.path.exists(ruta_completa):
                 try:
@@ -680,10 +718,19 @@ class TEAyudoApp:
         if not img_cargada:
             contenido = emoji_char if emoji_char else texto[0].upper()
             font_size = int(s * 0.5)
-            try: font = ImageFont.truetype("seguiemj.ttf", font_size) 
-            except: 
-                try: font = ImageFont.truetype("arial.ttf", font_size)
-                except: font = ImageFont.load_default()
+            
+            # Intentar cargar fuente compatible con Linux
+            font = ImageFont.load_default()
+            try:
+                if SYSTEM_OS == "Windows":
+                    font = ImageFont.truetype("seguiemj.ttf", font_size)
+                else:
+                    # Intentar fuentes comunes de Linux que tengan símbolos
+                    try:
+                        font = ImageFont.truetype("DejaVuSans.ttf", font_size)
+                    except:
+                        font = ImageFont.truetype("arial.ttf", font_size)
+            except: pass
             
             try:
                 bbox = draw.textbbox((0,0), contenido, font=font)
