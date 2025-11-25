@@ -16,36 +16,41 @@ def get_system_font():
 
 SYSTEM_FONT = get_system_font()
 
-# --- CONFIGURACIÓN ---
+# --- CONFIGURACIÓN VISUAL (NIVEL 2) ---
 class GameConfig:
-    MAIN_COLOR = "#4CAF50"       # Verde vibrante
-    HOVER_COLOR = "#66BB6A"
+    # Colores principales (Verde vibrante pero legible)
+    MAIN_COLOR = "#4CAF50"       
+    HOVER_COLOR = "#66BB6A"      
     TEXT_DARK = "#212121"
     CARD_COLOR = "white"
+    
+    # Colores para la ventana de victoria
+    BTN_MENU_COLOR = "#5B84B1"   # Azul grisáceo
+    BTN_NEXT_COLOR = "#4CAF50"   # Verde del juego
     
     # Imágenes (Se buscarán en esta carpeta o en ../nivel1)
     IMAGENES = [
         "papa.png", "zanahoria.png", "brocoli.png", "cebolla.png",
         "tomate.png", "lechuga.png", "pepino.png", "calabaza.png",
-        "manzana.png", "pera.png", "banana.png" # Agregué las de frutas por si acaso
+        "manzana.png", "pera.png", "banana.png"
     ]
 
 # --- FUNCIONES AUXILIARES ---
-def create_rounded_rectangle(canvas, x1, y1, x2, y2, radius, **kwargs):
-    points = [x1 + radius, y1, x2 - radius, y1, x2, y1, x2, y1 + radius,
-              x2, y2 - radius, x2, y2, x2 - radius, y2, x1 + radius, y2,
-              x1, y2, x1, y2 - radius, x1, y1 + radius, x1, y1]
-    return canvas.create_polygon(points, smooth=True, **kwargs)
-
 class MathDragGameLevel2:
     def __init__(self, master):
         self.master = master
         master.title("Matemáticas - Nivel 2")
         
+        # --- CONFIGURACIÓN PANTALLA ---
+        master.update_idletasks() 
+        
         if SYSTEM_OS == "Windows":
             master.attributes("-fullscreen", True)
         else:
-            master.attributes("-fullscreen", True)
+            w = master.winfo_screenwidth()
+            h = master.winfo_screenheight()
+            master.geometry(f"{w}x{h}+0+0")
+            master.after(100, lambda: master.attributes("-fullscreen", True))
             
         master.configure(bg=GameConfig.MAIN_COLOR)
         master.bind("<Escape>", self.volver_al_menu)
@@ -57,10 +62,11 @@ class MathDragGameLevel2:
         base_height = 800
         self.scale = min(screen_width / base_width, screen_height / base_height)
 
-        # Fuentes y Tamaños
+        # Fuentes
         self.font_title = (SYSTEM_FONT, int(32 * self.scale), "bold")
         self.font_signos = (SYSTEM_FONT, int(50 * self.scale), "bold")
         self.font_btn = (SYSTEM_FONT, int(14 * self.scale), "bold")
+        self.font_win_title = (SYSTEM_FONT, int(40 * self.scale), "bold")
         
         self.box_size = int(120 * self.scale) 
         
@@ -84,11 +90,13 @@ class MathDragGameLevel2:
         
         self.ancho_real_frame = cw - 40 
 
-        create_rounded_rectangle(self.main_canvas, cx - cw//2, cy - ch//2, cx + cw//2, cy + ch//2, radius=40, fill=GameConfig.CARD_COLOR)
+        # Fondo blanco redondeado simétrico
+        self._draw_rounded_rectangle(self.main_canvas, cx - cw//2, cy - ch//2, cx + cw//2, cy + ch//2, radius=40, fill=GameConfig.CARD_COLOR, outline="")
 
         self.content_frame = tk.Frame(self.main_canvas, bg=GameConfig.CARD_COLOR)
         self.content_frame.place(x=cx - cw//2 + 20, y=cy - ch//2 + 20, width=self.ancho_real_frame, height=ch-40)
 
+        # Botón Menú
         self.btn_menu = tk.Label(self.content_frame, text="⬅ Menú", font=self.font_btn, 
                                    bg=GameConfig.MAIN_COLOR, fg="white", padx=15, pady=8, cursor="hand2")
         self.btn_menu.place(x=10, y=10)
@@ -133,6 +141,24 @@ class MathDragGameLevel2:
         # Slot 3 (Resultado)
         self.lbl_target3 = tk.Label(self.frame_slots, bg="white", bd=0)
         self.lbl_target3.grid(row=0, column=4, padx=20)
+
+    # --- DIBUJO SIMÉTRICO ---
+    def _draw_rounded_rectangle(self, canvas, x1, y1, x2, y2, radius, **kwargs):
+        points = [
+            (x1 + radius, y1), (x1 + radius, y1),
+            (x2 - radius, y1), (x2 - radius, y1),
+            (x2, y1),
+            (x2, y1 + radius), (x2, y1 + radius),
+            (x2, y2 - radius), (x2, y2 - radius),
+            (x2, y2),
+            (x2 - radius, y2), (x2 - radius, y2),
+            (x1 + radius, y2), (x1 + radius, y2),
+            (x1, y2),
+            (x1, y2 - radius), (x1, y2 - radius),
+            (x1, y1 + radius), (x1, y1 + radius),
+            (x1, y1)
+        ]
+        return canvas.create_polygon(points, smooth=True, **kwargs)
 
     def _start_new_round(self):
         for widget in self.content_frame.winfo_children():
@@ -257,10 +283,8 @@ class MathDragGameLevel2:
                     encontrado = True
                     
                     if all(self.estado_slots):
-                        self.master.after(300, self.game_win)
+                        self.master.after(300, self._show_win_screen)
                     break
-                else:
-                    pass
 
         if not encontrado:
             self.return_to_home(widget)
@@ -268,30 +292,76 @@ class MathDragGameLevel2:
     def return_to_home(self, widget):
         widget.place(x=widget.home_x, y=widget.home_y)
 
-    def game_win(self):
+    # =============================================================
+    # PANTALLA DE FELICITACIÓN PERSONALIZADA (VERDE)
+    # =============================================================
+    def _show_win_screen(self):
         win = tk.Toplevel(self.master)
-        win.title("¡Ganaste!")
-        w, h = 400, 280
-        cx = self.master.winfo_screenwidth() // 2
-        cy = self.master.winfo_screenheight() // 2
-        win.geometry(f"{w}x{h}+{cx-w//2}+{cy-h//2}")
-        win.configure(bg="white")
+        
+        # 1. Configuración Sin Bordes
         win.overrideredirect(True)
         win.attributes("-topmost", True)
+        win.grab_set()
 
-        tk.Frame(win, bg=GameConfig.MAIN_COLOR, height=15).pack(fill="x")
-        tk.Label(win, text="¡Correcto!", font=(SYSTEM_FONT, 26, "bold"), bg="white", fg=GameConfig.MAIN_COLOR).pack(pady=(30, 10))
-        tk.Label(win, text="¡Completaste la operación! ➕", font=(SYSTEM_FONT, 14), bg="white", fg="#555").pack(pady=10)
+        # Dimensiones
+        w, h = int(500 * self.scale), int(350 * self.scale)
         
-        btn = tk.Label(win, text="Siguiente Ejercicio", font=(SYSTEM_FONT, 14, "bold"),
-                       bg=GameConfig.MAIN_COLOR, fg="white", padx=20, pady=10, cursor="hand2")
-        btn.pack(pady=20)
+        # Centrar
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
+        win.geometry(f"{w}x{h}+{x}+{y}")
         
-        def reiniciar(e):
+        # Color del borde
+        border_color = GameConfig.MAIN_COLOR 
+        win.configure(bg=border_color)
+
+        # 2. Canvas
+        canvas = tk.Canvas(win, width=w, height=h, bg=border_color, highlightthickness=0)
+        canvas.pack(fill="both", expand=True)
+        
+        # Fondo blanco simétrico
+        self._draw_rounded_rectangle(canvas, 10, 10, w-10, h-10, radius=20, fill="white", outline="white")
+        
+        # --- CONTENIDO ---
+        tk.Label(win, text="¡Muy Bien!", font=self.font_win_title, bg="white", fg=GameConfig.MAIN_COLOR).place(relx=0.5, rely=0.25, anchor="center")
+        
+        sub_font = (SYSTEM_FONT, int(16 * self.scale))
+        tk.Label(win, text="¡Completaste la operación! ➕", font=sub_font, bg="white", fg=GameConfig.TEXT_DARK).place(relx=0.5, rely=0.5, anchor="center")
+        
+        # --- BOTONES ---
+        btn_container = tk.Frame(win, bg="white")
+        btn_container.place(relx=0.5, rely=0.75, anchor="center")
+        
+        def action(act):
             win.destroy()
-            self._start_new_round()
+            if act == "next": self._start_new_round()
+            elif act == "menu": self.volver_al_menu()
             
-        btn.bind("<Button-1>", reiniciar)
+        # Efectos Hover
+        def on_enter_green(e): e.widget['bg'] = GameConfig.HOVER_COLOR
+        def on_leave_green(e): e.widget['bg'] = GameConfig.BTN_NEXT_COLOR
+        
+        def on_enter_blue(e): e.widget['bg'] = '#7FA6D6'
+        def on_leave_blue(e): e.widget['bg'] = GameConfig.BTN_MENU_COLOR
+
+        # Botón Menú
+        btn_menu = tk.Button(btn_container, text="Menú 🏠", font=self.font_btn,
+                             bg=GameConfig.BTN_MENU_COLOR, fg="white", 
+                             relief="flat", cursor="hand2", padx=20, pady=10,
+                             command=lambda: action("menu"))
+        btn_menu.pack(side=tk.LEFT, padx=15)
+        btn_menu.bind("<Enter>", on_enter_blue)
+        btn_menu.bind("<Leave>", on_leave_blue)
+
+        # Botón Siguiente
+        btn_next = tk.Button(btn_container, text="Siguiente ➡", font=self.font_btn,
+                             bg=GameConfig.BTN_NEXT_COLOR, fg="white", 
+                             relief="flat", cursor="hand2", padx=20, pady=10,
+                             command=lambda: action("next"))
+        btn_next.pack(side=tk.LEFT, padx=15)
+        btn_next.bind("<Enter>", on_enter_green)
+        btn_next.bind("<Leave>", on_leave_green)
+    # =============================================================
 
     # --- CARGA DE IMÁGENES ---
     def crear_imagen_verdura(self, nombre_archivo, cantidad):
@@ -312,7 +382,7 @@ class MathDragGameLevel2:
             posibles_rutas.append(os.path.join(SCRIPT_DIR, fname))
             posibles_rutas.append(os.path.join(SCRIPT_DIR, "imagenes", fname))
             posibles_rutas.append(os.path.join(SCRIPT_DIR, "assets", fname))
-            # Búsqueda en Nivel 1 para compartir recursos
+            # Buscar en nivel1 si comparten recursos
             posibles_rutas.append(os.path.join(SCRIPT_DIR, "..", "nivel1", fname))
         
         for r in posibles_rutas:
@@ -354,7 +424,6 @@ class MathDragGameLevel2:
                 off_y = (th - new_h)//2
                 canvas_img.paste(img_res, (x+off_x, y+off_y), img_res)
             else:
-                # Si no encuentra la imagen, muestra texto de error
                 try:
                     font_err = ImageFont.truetype("arial.ttf", 10)
                 except:
@@ -370,7 +439,6 @@ class MathDragGameLevel2:
         draw.rectangle([0, 0, s-1, s-1], outline=GameConfig.MAIN_COLOR, width=3)
         
         try:
-            # Usa fuente del sistema detectada
             font_name = "arial.ttf" if SYSTEM_OS == "Windows" else "DejaVuSans.ttf"
             font = ImageFont.truetype(font_name, int(s*0.6))
         except:
@@ -394,7 +462,6 @@ class MathDragGameLevel2:
         return ImageTk.PhotoImage(img)
 
     def volver_al_menu(self, event=None):
-        # Busca el menú: .../matematicas/menu/menumatematicas.py
         path = os.path.join(SCRIPT_DIR, "..", "menu", "menumatematicas.py")
         path = os.path.normpath(path)
         
