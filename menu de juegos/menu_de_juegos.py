@@ -9,7 +9,7 @@ from PIL import Image, ImageTk, ImageDraw, ImageFont
 # ========== DETECCIÓN DE SISTEMA ==========
 ES_WINDOWS = platform.system() == "Windows"
 
-# ========== RUTAS (Optimizada) ==========
+# ========== RUTAS ==========
 def get_project_root():
     script_path = os.path.abspath(__file__)
     script_dir = os.path.dirname(script_path)
@@ -24,7 +24,7 @@ def get_safe_path(*path_parts):
     safe_path = os.path.join(PROJECT_ROOT, *path_parts)
     return os.path.abspath(safe_path)
 
-# ========== FUENTE (Font) COMPATIBLE ==========
+# ========== FUENTE COMPATIBLE ==========
 def get_font_name():
     return "arial.ttf" if ES_WINDOWS else "DejaVuSans.ttf"
 
@@ -45,10 +45,26 @@ class GameMenu:
         self.master = master
         self.main_project_root = PROJECT_ROOT
         
-        # Configuración de pantalla completa
-        master.attributes("-fullscreen", True)
+        master.title("Menú Principal")
+
+        # ============================================================
+        # CORRECCIÓN PANTALLA COMPLETA (LA SOLUCIÓN A TU PROBLEMA)
+        # ============================================================
+        master.update_idletasks() # Obliga a leer el tamaño real del monitor
+        
+        if ES_WINDOWS:
+            master.attributes("-fullscreen", True)
+        else:
+            # En Linux/Raspberry, forzamos el tamaño antes de quitar los bordes
+            w = master.winfo_screenwidth()
+            h = master.winfo_screenheight()
+            master.geometry(f"{w}x{h}+0+0")
+            # Esperamos un instante para aplicar el fullscreen real
+            master.after(100, lambda: master.attributes("-fullscreen", True))
+            
         master.bind("<Escape>", self.toggle_fullscreen)
         
+        # Obtener dimensiones para escalar
         self.screen_width = master.winfo_screenwidth()
         self.screen_height = master.winfo_screenheight()
         
@@ -58,20 +74,18 @@ class GameMenu:
         self.scale = min(self.screen_width / self.base_width, self.screen_height / self.base_height)
         
         # --- PALETA DE COLORES ---
-        self.yellow_bg = "#FFDE59"      # Fondo principal
-        self.white_frame_bg = "#FFFFFF" # Tarjeta central
+        self.yellow_bg = "#FFDE59"      
+        self.white_frame_bg = "#FFFFFF" 
         self.text_color = "#333333"
         
-        # Colores para bordes de botones
         self.red_border = "#FF4B4B"
         self.pink_border = "#FF69B4"
         self.green_border = "#4CAF50"
         self.blue_border = "#00BFFF"
         
-        # Colores del Menú Lateral (NUEVOS)
-        self.menu_bg_color = "#FFFFFF"       # Fondo del menú blanco limpio
-        self.menu_header_color = "#FFDE59"   # Cabecera amarilla
-        self.menu_hover_color = "#FFF9C4"    # Amarillo muy suave al pasar el mouse
+        self.menu_bg_color = "#FFFFFF"       
+        self.menu_header_color = "#FFDE59"   
+        self.menu_hover_color = "#FFF9C4"    
         
         master.config(bg=self.yellow_bg)
         self.menu_open = False
@@ -234,52 +248,40 @@ class GameMenu:
         text_label.bind("<Button-1>", lambda e: command())
         button_canvas.bind("<Button-1>", lambda e: command())
 
-    # ========== MENÚ LATERAL (ESTÉTICO) ==========
+    # ========== MENÚ LATERAL ==========
     def create_side_menu(self):
-        # Marco principal del menú (Fondo blanco)
         self.side_menu_frame = Frame(self.master, bg=self.menu_bg_color, relief="flat")
-        
-        # Sombra lateral (opcional, simple linea gris)
         self.menu_shadow = Frame(self.master, bg="#CCCCCC")
 
-        # --- CABECERA DEL MENÚ (AMARILLA) ---
         self.menu_header = Frame(self.side_menu_frame, bg=self.menu_header_color, height=int(100 * self.scale))
         self.menu_header.pack(fill="x", side="top")
-        self.menu_header.pack_propagate(False) # Respetar altura fija
+        self.menu_header.pack_propagate(False) 
 
-        # Título "MENÚ"
         header_label = Label(self.menu_header, text="MENÚ", 
                              font=("Arial", int(24 * self.scale), "bold"),
                              bg=self.menu_header_color, fg=self.text_color)
         header_label.pack(side="left", padx=int(20 * self.scale), pady=int(20 * self.scale))
 
-        # Botón cerrar menú (X) dentro de la cabecera
         close_btn = Label(self.menu_header, text="✕", 
                           font=("Arial", int(20 * self.scale), "bold"),
                           bg=self.menu_header_color, fg=self.text_color, cursor="hand2")
         close_btn.pack(side="right", padx=int(20 * self.scale))
         close_btn.bind("<Button-1>", lambda e: self.close_side_menu())
 
-        # --- CONTENIDO DEL MENÚ ---
         self.menu_content = Frame(self.side_menu_frame, bg=self.menu_bg_color)
         self.menu_content.pack(fill="both", expand=True, pady=int(20 * self.scale))
 
-        # Opciones del menú usando helper para estilo consistente
         self._create_menu_item(self.menu_content, "📡  Conectividad", self.show_connectivity)
         self._create_menu_item(self.menu_content, "ℹ️  Acerca de...", self.show_about)
         self._create_menu_item(self.menu_content, "⏰  Temporizador", self.show_clock)
 
-        # Logo o pie de página opcional (espacio vacío abajo)
         spacer = Frame(self.side_menu_frame, bg=self.menu_bg_color, height=50)
         spacer.pack(side="bottom", fill="x")
 
     def _create_menu_item(self, parent, text, command):
-        """ Crea un botón de menú estético con efecto hover """
-        # Contenedor del botón (para márgenes)
         container = Frame(parent, bg=self.menu_bg_color)
-        container.pack(fill="x", pady=2) # Espacio vertical pequeño entre botones
+        container.pack(fill="x", pady=2) 
 
-        # El "Botón" es un Label grande con padding
         btn_label = Label(container, text=text, 
                           font=("Arial", int(16 * self.scale)),
                           bg=self.menu_bg_color, fg=self.text_color,
@@ -287,10 +289,8 @@ class GameMenu:
                           cursor="hand2")
         btn_label.pack(fill="x")
 
-        # Efectos Hover
         def on_enter(e):
             btn_label.config(bg=self.menu_hover_color, font=("Arial", int(16 * self.scale), "bold"))
-            # Opcional: añadir una barrita de color a la izquierda
             
         def on_leave(e):
             btn_label.config(bg=self.menu_bg_color, font=("Arial", int(16 * self.scale)))
@@ -307,16 +307,13 @@ class GameMenu:
         self.menu_open = True
         if hasattr(self, 'menu_btn'): self.menu_btn.config(state="disabled")
         
-        menu_width = int(350 * self.scale) # Un poco más ancho para verse mejor
+        menu_width = int(350 * self.scale) 
         menu_height = self.screen_height
         
-        # Mostrar sombra (borde derecho)
         self.menu_shadow.place(x=menu_width, y=0, width=2, height=menu_height)
-        # Mostrar menú
         self.side_menu_frame.place(x=0, y=0, width=menu_width, height=menu_height)
         self.side_menu_frame.lift()
         
-        # Bind clic fuera
         self.master.bind("<Button-1>", self.check_click_outside_menu)
 
     def close_side_menu(self):
@@ -327,7 +324,6 @@ class GameMenu:
         self.master.unbind("<Button-1>")
 
     def check_click_outside_menu(self, event):
-        # Evitar cerrar si se hace clic en el botón de abrir menú
         if event.widget == self.menu_btn or self.menu_btn in event.widget.master.winfo_children():
             return
 
@@ -336,7 +332,6 @@ class GameMenu:
             self.close_side_menu()
 
     def create_corner_buttons(self):
-        # Botón Hamburguesa (Izquierda)
         if self.icons.get("menu"):
             self.menu_btn = tk.Button(self.master, image=self.icons["menu"], command=self.toggle_side_menu,
                                       bd=0, bg=self.yellow_bg, activebackground=self.yellow_bg, relief="flat", cursor="hand2")
@@ -345,7 +340,6 @@ class GameMenu:
                                     font=("Arial", int(20 * self.scale), "bold"), bg=self.yellow_bg, bd=0, 
                                     fg=self.text_color, activebackground=self.yellow_bg, cursor="hand2")
         
-        # Botón Cerrar App (Derecha) - Mantenemos el original
         if self.icons.get("close"):
             self.close_btn = tk.Button(self.master, image=self.icons["close"], command=self.exit_application,
                                        bd=0, bg=self.yellow_bg, activebackground=self.yellow_bg, relief="flat", cursor="hand2")
@@ -409,13 +403,21 @@ class GameMenu:
         messagebox.showinfo("Conectividad", "Próximamente: Opciones de conectividad y red.")
         self.close_side_menu()
 
-    # --- NUEVA LÓGICA DE ACERCA DE ---
     def show_about(self):
         self.close_side_menu() 
 
         ventana_acerca = Toplevel(self.master)
         ventana_acerca.title("Acerca de Nosotros")
-        ventana_acerca.attributes('-fullscreen', True)
+        
+        # --- CORRECCIÓN FULLSCREEN PARA ACERCA DE ---
+        if ES_WINDOWS:
+            ventana_acerca.attributes('-fullscreen', True)
+        else:
+            w = self.master.winfo_screenwidth()
+            h = self.master.winfo_screenheight()
+            ventana_acerca.geometry(f"{w}x{h}+0+0")
+            ventana_acerca.attributes('-fullscreen', True)
+            
         ventana_acerca.configure(bg="white")
 
         canvas_main = Canvas(ventana_acerca, bg="white", highlightthickness=0)
@@ -440,11 +442,13 @@ class GameMenu:
                 imagen_redimensionada = imagen_original.resize((nuevo_ancho, nuevo_alto), Image.Resampling.LANCZOS)
                 imagen_tk = ImageTk.PhotoImage(imagen_redimensionada)
 
+                # Referencia para evitar basura
+                ventana_acerca.image = imagen_tk 
+                
                 canvas_main.create_image(pos_x, pos_y, anchor="nw", image=imagen_tk)
-                canvas_main.image = imagen_tk 
             except Exception as e:
                 print(f"Error cargando imagen nosotros: {e}")
-                canvas_main.create_text(self.screen_width//2, self.screen_height//2, text="Error al cargar imagen")
+                canvas_main.create_text(ancho_pantalla//2, alto_pantalla//2, text="Error al cargar imagen")
         else:
             canvas_main.create_text(self.screen_width//2, self.screen_height//2, 
                                     text="No se encontró 'nosotros.png'", font=("Arial", 20))
@@ -452,16 +456,17 @@ class GameMenu:
         self._dibujar_boton_volver(canvas_main, ventana_acerca)
 
         ventana_acerca.bind("<Escape>", lambda event: ventana_acerca.destroy())
+        ventana_acerca.focus_set()
 
     def _dibujar_boton_volver(self, canvas, ventana):
         ancho_btn = 140
         alto_btn = 45
         radio = 20
-        # Posición: Esquina superior derecha con margen
+        
         x = self.screen_width - ancho_btn - 30 
         y = 30
-        color_normal = "#FF5733" # Naranja
-        color_hover = "#C70039"  # Rojo oscuro
+        color_normal = "#FF5733" 
+        color_hover = "#C70039" 
         
         x1, y1 = x, y
         x2, y2 = x + ancho_btn, y + alto_btn
