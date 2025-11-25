@@ -18,43 +18,36 @@ SYSTEM_FONT = get_system_font()
 
 # --- CONFIGURACIÓN VISUAL ---
 class GameConfig:
-    MAIN_COLOR = "#00C853"       # Verde del menú
-    HOVER_COLOR = "#66BB6A"
+    # COLORES DEL JUEGO (VERDE)
+    MAIN_COLOR = "#00C853"       # Verde principal
+    HOVER_COLOR = "#00E676"      # Verde más claro para hover
     TEXT_DARK = "#212121"
     CARD_COLOR = "white"
     
-    # IMPORTANTE: Asegúrate de que tus archivos se llamen EXACTAMENTE así 
-    # (respetando mayúsculas y minúsculas para que funcione en Linux)
+    # Colores para la ventana de victoria
+    BTN_MENU_COLOR = "#5B84B1"   # Azul grisáceo (para diferenciar)
+    BTN_NEXT_COLOR = "#00C853"   # Verde del juego
+    
     IMAGENES = [
         "manzana.png", "pera.png", "banana.png", 
         "frutilla.png", "naranja.png", "limon.png",
         "piña.png", "sandia.png"
     ]
 
-# --- FUNCIONES AUXILIARES ---
-def create_rounded_rectangle(canvas, x1, y1, x2, y2, radius, **kwargs):
-    points = [x1 + radius, y1, x2 - radius, y1, x2, y1, x2, y1 + radius,
-              x2, y2 - radius, x2, y2, x2 - radius, y2, x1 + radius, y2,
-              x1, y2, x1, y2 - radius, x1, y1 + radius, x1, y1]
-    return canvas.create_polygon(points, smooth=True, **kwargs)
-
 class MathDragGame:
     def __init__(self, master):
         self.master = master
         master.title("Matemáticas - Nivel 1")
         
-        # --- CORRECCIÓN PARA RASPBERRY PI ---
-        master.update_idletasks() # Actualiza para leer bien el tamaño de pantalla
+        # --- CONFIGURACIÓN DE PANTALLA ---
+        master.update_idletasks() 
         
         if SYSTEM_OS == "Windows":
             master.attributes("-fullscreen", True)
         else:
-            # En Linux forzamos el tamaño manual primero
             w = master.winfo_screenwidth()
             h = master.winfo_screenheight()
             master.geometry(f"{w}x{h}+0+0")
-            
-            # Y esperamos 100ms para activar el fullscreen
             master.after(100, lambda: master.attributes("-fullscreen", True))
             
         master.configure(bg=GameConfig.MAIN_COLOR)
@@ -71,6 +64,7 @@ class MathDragGame:
         self.font_title = (SYSTEM_FONT, int(32 * self.scale), "bold")
         self.font_signos = (SYSTEM_FONT, int(50 * self.scale), "bold")
         self.font_btn = (SYSTEM_FONT, int(14 * self.scale), "bold")
+        self.font_win_title = (SYSTEM_FONT, int(40 * self.scale), "bold") # Fuente Titulo Ventana
         
         self.box_size = int(130 * self.scale)
         
@@ -95,14 +89,14 @@ class MathDragGame:
         
         self.ancho_real_frame = cw - 40 
 
-        # Dibujar fondo blanco redondeado
-        create_rounded_rectangle(self.main_canvas, cx - cw//2, cy - ch//2, cx + cw//2, cy + ch//2, radius=40, fill=GameConfig.CARD_COLOR)
+        # Dibujar fondo blanco redondeado con la función simétrica
+        self._draw_rounded_rectangle(self.main_canvas, cx - cw//2, cy - ch//2, cx + cw//2, cy + ch//2, radius=40, fill=GameConfig.CARD_COLOR, outline="")
 
         # Frame principal SOBRE la tarjeta
         self.content_frame = tk.Frame(self.main_canvas, bg=GameConfig.CARD_COLOR)
         self.content_frame.place(x=cx - cw//2 + 20, y=cy - ch//2 + 20, width=self.ancho_real_frame, height=ch-40)
 
-        # Botón Menú
+        # Botón Menú (Arriba a la izquierda)
         self.btn_menu = tk.Label(self.content_frame, text="⬅ Menú", font=self.font_btn, 
                                    bg=GameConfig.MAIN_COLOR, fg="white", padx=15, pady=8, cursor="hand2")
         self.btn_menu.place(x=10, y=10)
@@ -135,6 +129,24 @@ class MathDragGame:
         # TARGET (Signo de Interrogación)
         self.lbl_target = tk.Label(self.frame_ecuacion, bg="#EEEEEE", bd=2, relief="solid")
         self.lbl_target.grid(row=0, column=4, padx=15)
+
+    # --- FUNCIÓN DE DIBUJO SIMÉTRICA (LA QUE TE GUSTÓ) ---
+    def _draw_rounded_rectangle(self, canvas, x1, y1, x2, y2, radius, **kwargs):
+        points = [
+            (x1 + radius, y1), (x1 + radius, y1),
+            (x2 - radius, y1), (x2 - radius, y1),
+            (x2, y1),
+            (x2, y1 + radius), (x2, y1 + radius),
+            (x2, y2 - radius), (x2, y2 - radius),
+            (x2, y2),
+            (x2 - radius, y2), (x2 - radius, y2),
+            (x1 + radius, y2), (x1 + radius, y2),
+            (x1, y2),
+            (x1, y2 - radius), (x1, y2 - radius),
+            (x1, y1 + radius), (x1, y1 + radius),
+            (x1, y1)
+        ]
+        return canvas.create_polygon(points, smooth=True, **kwargs)
 
     def _start_new_round(self):
         # Limpiar fichas anteriores
@@ -231,13 +243,15 @@ class MathDragGame:
 
         if t_x1 < drop_x < t_x2 and t_y1 < drop_y < t_y2:
             if widget.es_correcta:
+                # Centrar ficha en el objetivo
                 final_x = self.lbl_target.winfo_rootx() - self.content_frame.winfo_rootx()
                 final_y = self.lbl_target.winfo_rooty() - self.content_frame.winfo_rooty()
                 
                 widget.place(x=final_x, y=final_y)
                 widget.lift()
                 
-                self.master.after(200, self.game_win)
+                # Llamar a la nueva pantalla de victoria
+                self.master.after(200, self._show_win_screen)
             else:
                 self.return_to_home(widget)
         else:
@@ -246,30 +260,79 @@ class MathDragGame:
     def return_to_home(self, widget):
         widget.place(x=widget.home_x, y=widget.home_y)
 
-    def game_win(self):
+    # =============================================================
+    # PANTALLA DE FELICITACIÓN PERSONALIZADA (VERDE)
+    # =============================================================
+    def _show_win_screen(self):
         win = tk.Toplevel(self.master)
-        win.title("¡Ganaste!")
-        w, h = 400, 280
-        cx = self.master.winfo_screenwidth() // 2
-        cy = self.master.winfo_screenheight() // 2
-        win.geometry(f"{w}x{h}+{cx-w//2}+{cy-h//2}")
-        win.configure(bg="white")
+        
+        # 1. Configuración Sin Bordes
         win.overrideredirect(True)
         win.attributes("-topmost", True)
+        win.grab_set()
 
-        tk.Frame(win, bg=GameConfig.MAIN_COLOR, height=15).pack(fill="x")
-        tk.Label(win, text="¡Correcto!", font=(SYSTEM_FONT, 26, "bold"), bg="white", fg=GameConfig.MAIN_COLOR).pack(pady=(30, 10))
-        tk.Label(win, text="¡Excelente trabajo! 🎉", font=(SYSTEM_FONT, 14), bg="white", fg="#555").pack(pady=10)
+        # Dimensiones
+        w, h = int(500 * self.scale), int(350 * self.scale)
         
-        btn = tk.Label(win, text="Siguiente Nivel", font=(SYSTEM_FONT, 14, "bold"),
-                       bg=GameConfig.MAIN_COLOR, fg="white", padx=20, pady=10, cursor="hand2")
-        btn.pack(pady=20)
+        # Centrar
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
+        win.geometry(f"{w}x{h}+{x}+{y}")
         
-        def reiniciar(e):
+        # Color del borde (VERDE del juego)
+        border_color = GameConfig.MAIN_COLOR 
+        win.configure(bg=border_color)
+
+        # 2. Canvas para fondo redondeado
+        canvas = tk.Canvas(win, width=w, height=h, bg=border_color, highlightthickness=0)
+        canvas.pack(fill="both", expand=True)
+        
+        # Fondo blanco con esquinas redondeadas SIMÉTRICAS
+        self._draw_rounded_rectangle(canvas, 10, 10, w-10, h-10, radius=20, fill="white", outline="white")
+        
+        # --- CONTENIDO ---
+        
+        # Título "¡Muy Bien!" en VERDE
+        tk.Label(win, text="¡Muy Bien!", font=self.font_win_title, bg="white", fg=GameConfig.MAIN_COLOR).place(relx=0.5, rely=0.25, anchor="center")
+        
+        # Subtítulo con la respuesta correcta
+        sub_font = (SYSTEM_FONT, int(16 * self.scale))
+        tk.Label(win, text=f"¡La respuesta es {self.resultado}!", font=sub_font, bg="white", fg=GameConfig.TEXT_DARK).place(relx=0.5, rely=0.5, anchor="center")
+        
+        # --- BOTONES ---
+        btn_container = tk.Frame(win, bg="white")
+        btn_container.place(relx=0.5, rely=0.75, anchor="center")
+        
+        def action(act):
             win.destroy()
-            self._start_new_round()
+            if act == "next": self._start_new_round()
+            elif act == "menu": self.volver_al_menu()
             
-        btn.bind("<Button-1>", reiniciar)
+        # Efectos Hover
+        def on_enter_green(e): e.widget['bg'] = GameConfig.HOVER_COLOR
+        def on_leave_green(e): e.widget['bg'] = GameConfig.BTN_NEXT_COLOR
+        
+        def on_enter_blue(e): e.widget['bg'] = '#7FA6D6'
+        def on_leave_blue(e): e.widget['bg'] = GameConfig.BTN_MENU_COLOR
+
+        # Botón Menú (Azul)
+        btn_menu = tk.Button(btn_container, text="Menú 🏠", font=self.font_btn,
+                             bg=GameConfig.BTN_MENU_COLOR, fg="white", 
+                             relief="flat", cursor="hand2", padx=20, pady=10,
+                             command=lambda: action("menu"))
+        btn_menu.pack(side=tk.LEFT, padx=15)
+        btn_menu.bind("<Enter>", on_enter_blue)
+        btn_menu.bind("<Leave>", on_leave_blue)
+
+        # Botón Siguiente (Verde)
+        btn_next = tk.Button(btn_container, text="Siguiente ➡", font=self.font_btn,
+                             bg=GameConfig.BTN_NEXT_COLOR, fg="white", 
+                             relief="flat", cursor="hand2", padx=20, pady=10,
+                             command=lambda: action("next"))
+        btn_next.pack(side=tk.LEFT, padx=15)
+        btn_next.bind("<Enter>", on_enter_green)
+        btn_next.bind("<Leave>", on_leave_green)
+    # =============================================================
 
     def crear_imagen_compuesta(self, nombre_archivo, cantidad, is_option=False):
         s = self.box_size
@@ -279,7 +342,6 @@ class MathDragGame:
         draw.rectangle([0, 0, s-1, s-1], outline="black" if is_option else GameConfig.TEXT_DARK, width=2)
 
         item_img = None
-        # Busca la imagen en la carpeta actual
         ruta = os.path.join(SCRIPT_DIR, nombre_archivo)
         
         if os.path.exists(ruta):
@@ -318,7 +380,6 @@ class MathDragGame:
                 off_y = (th - new_h)//2
                 canvas_img.paste(img_res, (x+off_x, y+off_y), img_res)
             else:
-                # Si no encuentra la imagen, dibuja círculos rojos
                 draw.ellipse([x, y, x+tw, y+th], fill="red", outline="black")
 
         return ImageTk.PhotoImage(canvas_img)
@@ -329,19 +390,16 @@ class MathDragGame:
         draw = ImageDraw.Draw(img)
         draw.rectangle([0, 0, s-1, s-1], outline="#9E9E9E", width=2)
         try:
-            # Intenta usar Arial si está disponible
             font_name = "arial.ttf" if SYSTEM_OS == "Windows" else "DejaVuSans.ttf"
             font = ImageFont.truetype(font_name, int(s/2))
             bbox = draw.textbbox((0, 0), "?", font=font)
             w, h = bbox[2]-bbox[0], bbox[3]-bbox[1]
             draw.text(((s-w)/2, (s-h)/2 - 10), "?", fill="#9E9E9E", font=font)
         except:
-            # Fallback simple
             draw.text((s//3, s//4), "?", fill="#9E9E9E")
         return ImageTk.PhotoImage(img)
 
     def volver_al_menu(self, event=None):
-        # Busca el menú: .../matematicas/menu/menumatematicas.py
         path = os.path.join(SCRIPT_DIR, "..", "menu", "menumatematicas.py")
         path = os.path.normpath(path)
         
