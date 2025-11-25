@@ -8,19 +8,21 @@ import subprocess
 import threading
 import platform
 
-# ========== INICIALIZACIÓN DE AUDIO Y RUTAS ==========
+# ========== CONFIGURACIÓN DE SISTEMA ==========
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SYSTEM_OS = platform.system()
 
-# Intento de importar pygame y gTTS con manejo de errores para RPi
+# Intento de importar audio
 try:
     import pygame.mixer
     from gtts import gTTS
-except ImportError as e:
-    print(f"ERROR CRÍTICO: Falta librería de audio: {e}")
-    print("En Raspberry Pi ejecuta: pip install pygame gTTS")
+    AUDIO_AVAILABLE = True
+except ImportError:
+    AUDIO_AVAILABLE = False
+    print("AVISO: Librerías de audio no encontradas.")
 
 def get_system_font():
-    return "Arial" if platform.system() == "Windows" else "DejaVu Sans"
+    return "Arial" if SYSTEM_OS == "Windows" else "DejaVu Sans"
 
 SYSTEM_FONT = get_system_font()
 
@@ -29,22 +31,23 @@ class SilabasGame:
         self.master = master
         master.title("Simón Dice: Las Sílabas")
 
-        # ✅ Pantalla completa y escala
+        # --- PANTALLA COMPLETA ---
+        master.attributes("-fullscreen", True)
+        master.bind("<Escape>", lambda e: self.go_to_menu())
+        master.configure(bg="#FF5757") 
+        
+        master.update_idletasks()
+
+        # Escala dinámica
         screen_width = master.winfo_screenwidth()
         screen_height = master.winfo_screenheight()
-        base_width = 800
-        base_height = 600
+        base_width = 1024
+        base_height = 768
         self.scale = min(screen_width / base_width, screen_height / base_height)
-
-        master.attributes("-fullscreen", True)
-        master.configure(bg="#FF5757")
-
-        # Salida de emergencia
-        master.bind("<Escape>", lambda e: self.go_to_menu())
 
         self._apply_scaling()
 
-        # Configuración de palabras (Revisa nombres de archivo en Linux!)
+        # Datos del Nivel 1
         self.all_words_data = [
             {"word": "ASUSTADO", "syllables": ["A", "SUS", "TA", "DO"], "image": "asustado.png"},
             {"word": "CAMINAR", "syllables": ["CA", "MI", "NAR"], "image": "caminar.png"},
@@ -67,79 +70,74 @@ class SilabasGame:
         self.previous_word_data = None
 
         self.shuffle_words()
-
-        # --- Inicializar Audio ---
         self._init_audio()
 
-        # --- Interfaz ---
-        self.canvas = tk.Canvas(master, bg="#FAD4D4", highlightthickness=0)
+        # --- INTERFAZ PRINCIPAL ---
+        self.canvas = tk.Canvas(master, bg="#FF5757", highlightthickness=0)
         self.canvas.place(relx=0.5, rely=0.5, anchor="center", width=self.canvas_width, height=self.canvas_height)
-        self.draw_rounded_rect(self.canvas, 0, 0, self.canvas_width, self.canvas_height, radius=int(20 * self.scale), fill="white", outline="white")
         
-        self.inner_frame = tk.Frame(self.canvas, bg="white")
-        self.inner_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self.draw_rounded_rect(self.canvas, 0, 0, self.canvas_width, self.canvas_height, 
+                               radius=int(30 * self.scale), fill="white", outline="white")
+        
+        self.inner_frame = tk.Frame(self.master, bg="white")
+        pad = int(20 * self.scale)
+        self.inner_frame.place(
+            x=(screen_width - self.canvas_width)/2 + pad, 
+            y=(screen_height - self.canvas_height)/2 + pad, 
+            width=self.canvas_width - (pad*2), 
+            height=self.canvas_height - (pad*2)
+        )
 
-        # Título
+        # --- ELEMENTOS DEL JUEGO ---
         self.title_container = tk.Frame(self.inner_frame, bg="white")
         self.title_container.place(relx=0.5, rely=0.1, anchor="center")
-
         self._load_icon("sonido.jpg", self.icon_size, self.title_container)
-        
         self.title_label = tk.Label(self.title_container, text="SIMÓN DICE", font=self.title_font, bg="white")
         self.title_label.pack(side=tk.LEFT)
 
-        # Imagen Principal
         self.main_image_label = tk.Label(self.inner_frame, bg="white")
         self.main_image_label.place(relx=0.5, rely=0.4, anchor="center")
 
-        # Sílaba
         self.syllable_container = tk.Frame(self.inner_frame, bg="white")
-        self.syllable_container.place(relx=0.5, rely=0.65, anchor="center")
-
+        self.syllable_container.place(relx=0.5, rely=0.68, anchor="center")
         self.speaker_label = self._load_icon("sonido.jpg", self.icon_size, self.syllable_container, clickable=True)
-        
         self.syllable_label = tk.Label(self.syllable_container, text="", font=self.syllable_font, bg="white")
         self.syllable_label.pack(side=tk.LEFT)
 
-        # Botones Inferiores
         self.bottom_buttons_container = tk.Frame(self.inner_frame, bg="white")
-        self.bottom_buttons_container.place(relx=0.5, rely=0.85, anchor="center")
+        self.bottom_buttons_container.place(relx=0.5, rely=0.88, anchor="center")
 
-        # Botón Repetir (Circular)
-        self.repeat_circle = tk.Canvas(self.inner_frame, bg="white", highlightthickness=0, width=self.repeat_button_size, height=self.repeat_button_size)
-        self.draw_rounded_rect(self.repeat_circle, 0, 0, self.repeat_button_size, self.repeat_button_size, radius=int(self.repeat_button_size / 2), fill="#FFB347", outline="#FFB347")
-        # Emoji de parlante es seguro en la mayoría de sistemas modernos
-        self.repeat_circle.create_text(self.repeat_button_size / 2, self.repeat_button_size / 2, text="🔊", font=self.repeat_font, fill="white")
-        self.repeat_circle.place(relx=0.95, rely=0.05, anchor="ne")
+        self.repeat_circle = tk.Canvas(self.inner_frame, bg="white", highlightthickness=0, 
+                                       width=self.repeat_button_size, height=self.repeat_button_size)
+        self.draw_rounded_rect(self.repeat_circle, 0, 0, self.repeat_button_size, self.repeat_button_size, 
+                               radius=int(self.repeat_button_size / 2), fill="#FFB347", outline="#FFB347")
+        self.repeat_circle.create_text(self.repeat_button_size / 2, self.repeat_button_size / 2, 
+                                       text="🔊", font=self.repeat_font, fill="white")
+        self.repeat_circle.place(relx=0.92, rely=0.08, anchor="ne")
         self.repeat_circle.bind("<Button-1>", lambda e: self.repeat_current_syllable())
 
-        # Botón Nivel 1 (Funcionalidad Siguiente)
-        self._create_pill_button("Nivel 1", "#FF6B6B", self.next_word_or_syllable)
-        
-        # Botón Menú
-        self._create_pill_button("Volver al Menú", "#5B84B1", self.go_to_menu)
+        self._create_pill_button("Siguiente", "#FF6B6B", self.next_word_or_syllable, self.bottom_buttons_container)
+        self._create_pill_button("Salir", "#5B84B1", self.go_to_menu, self.bottom_buttons_container)
 
-        # Flechas Navegación
-        self.next_button = tk.Button(self.inner_frame, text=">", font=self.arrow_font, bg="white", fg="#FF6B6B", relief="flat", command=self.next_word_or_syllable)
-        self.next_button.place(relx=0.75, rely=0.4, anchor="center")
+        self.next_button = tk.Button(self.inner_frame, text=">", font=self.arrow_font, 
+                                     bg="white", fg="#FF6B6B", relief="flat", command=self.next_word_or_syllable)
+        self.next_button.place(relx=0.88, rely=0.5, anchor="center")
 
-        self.prev_button = tk.Button(self.inner_frame, text="<", font=self.arrow_font, bg="white", fg="#FF6B6B", relief="flat", command=self.prev_syllable)
-        self.prev_button.place(relx=0.25, rely=0.4, anchor="center")
+        self.prev_button = tk.Button(self.inner_frame, text="<", font=self.arrow_font, 
+                                     bg="white", fg="#FF6B6B", relief="flat", command=self.prev_syllable)
+        self.prev_button.place(relx=0.12, rely=0.5, anchor="center")
 
-        self.syllable_count_label = tk.Label(self.inner_frame, text="", font=self.count_font, bg="white")
-        self.syllable_count_label.place(relx=0.9, rely=0.9, anchor="e")
-
-        # Icono Oreja
-        self._load_ear_icon()
+        self.syllable_count_label = tk.Label(self.inner_frame, text="", font=self.count_font, bg="white", fg="#999")
+        self.syllable_count_label.place(relx=0.95, rely=0.95, anchor="se")
 
         self.update_display()
 
     def _init_audio(self):
-        try:
-            # Frecuencia estándar 44100, 16bit, stereo, buffer 2048
-            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
-        except Exception as e:
-            print(f"Error pygame: {e}")
+        if AUDIO_AVAILABLE:
+            try:
+                pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
+            except Exception as e:
+                print(f"Error iniciando mixer: {e}")
         
         self.audio_cache_dir = os.path.join(SCRIPT_DIR, "audio_cache")
         if not os.path.exists(self.audio_cache_dir):
@@ -147,65 +145,47 @@ class SilabasGame:
 
     def _apply_scaling(self):
         scale = self.scale
-        self.canvas_width = int(700 * scale)
-        self.canvas_height = int(500 * scale)
-        self.image_width = int(200 * scale)
+        self.canvas_width = int(1000 * scale)
+        self.canvas_height = int(700 * scale)
+        self.image_width = int(250 * scale)
         
-        self.title_font = (SYSTEM_FONT, int(24 * scale), "bold")
-        self.syllable_font = (SYSTEM_FONT, int(36 * scale), "bold")
-        self.button_font = (SYSTEM_FONT, int(16 * scale), "bold")
-        self.small_button_font = (SYSTEM_FONT, int(12 * scale), "bold")
-        self.count_font = (SYSTEM_FONT, int(14 * scale))
-        self.arrow_font = (SYSTEM_FONT, int(30 * scale), "bold")
-        self.repeat_font = (SYSTEM_FONT, int(18 * scale))
+        self.title_font = (SYSTEM_FONT, int(28 * scale), "bold")
+        self.syllable_font = (SYSTEM_FONT, int(48 * scale), "bold")
+        self.button_font = (SYSTEM_FONT, int(14 * scale), "bold")
+        self.count_font = (SYSTEM_FONT, int(12 * scale))
+        self.arrow_font = (SYSTEM_FONT, int(40 * scale), "bold")
+        self.repeat_font = (SYSTEM_FONT, int(24 * scale))
         
-        self.level_button_width = int(150 * scale)
-        self.level_button_height = int(50 * scale)
-        self.menu_button_width = int(200 * scale)
-        self.menu_button_height = int(50 * scale)
-        self.repeat_button_size = int(50 * scale)
-        self.icon_size = int(30 * scale)
-        self.ear_height = int(100 * scale)
+        self.menu_button_width = int(160 * scale)
+        self.menu_button_height = int(45 * scale)
+        self.repeat_button_size = int(60 * scale)
+        self.icon_size = int(40 * scale)
 
     def _load_icon(self, filename, size, parent, clickable=False):
         path = os.path.join(SCRIPT_DIR, filename)
         if os.path.exists(path):
             try:
-                img = Image.open(path).resize((size, size), Image.Resampling.LANCZOS)
+                img = Image.open(path).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
                 photo = ImageTk.PhotoImage(img)
                 label = tk.Label(parent, image=photo, bg="white")
-                label.image = photo # Referencia para evitar GC
-                label.pack(side=tk.LEFT, padx=5)
+                label.image = photo 
+                label.pack(side=tk.LEFT, padx=10)
                 if clickable:
                     label.bind("<Button-1>", self._on_syllable_speaker_click)
                 return label
-            except Exception as e:
-                print(f"Error loading icon {filename}: {e}")
+            except: pass
         return None
 
-    def _load_ear_icon(self):
-        path = os.path.join(SCRIPT_DIR, "escuchar.png")
-        if os.path.exists(path):
-            try:
-                original = Image.open(path)
-                aspect = original.width / original.height
-                new_w = int(self.ear_height * aspect)
-                img = original.resize((new_w, self.ear_height), Image.Resampling.LANCZOS)
-                self.ear_photo = ImageTk.PhotoImage(img)
-                lbl = tk.Label(self.inner_frame, image=self.ear_photo, bg="white")
-                lbl.place(relx=0.08, rely=0.85, anchor="w")
-            except: pass
-        else:
-            lbl = tk.Label(self.inner_frame, text="[Escuchar]", font=self.count_font, bg="white")
-            lbl.place(relx=0.08, rely=0.92, anchor="w")
-
-    def _create_pill_button(self, text, color, command):
+    def _create_pill_button(self, text, color, command, parent_widget):
         w, h = self.menu_button_width, self.menu_button_height
-        canvas = tk.Canvas(self.bottom_buttons_container, bg="white", highlightthickness=0, width=w, height=h)
-        self.draw_rounded_rect(canvas, 0, 0, w, h, radius=int(15 * self.scale), fill=color, outline=color)
+        canvas = tk.Canvas(parent_widget, bg="white", highlightthickness=0, bd=0, width=w, height=h)
+        
+        # Margen interno de seguridad para evitar cortes
+        self.draw_rounded_rect(canvas, 3, 3, w-3, h-3, radius=int(20 * self.scale), fill=color, outline=color)
+        
         canvas.create_text(w / 2, h / 2, text=text, font=self.button_font, fill="white")
         canvas.bind("<Button-1>", lambda e: command())
-        canvas.pack(side=tk.LEFT, padx=int(10 * self.scale))
+        canvas.pack(side=tk.LEFT, padx=int(20 * self.scale))
 
     def draw_rounded_rect(self, canvas, x1, y1, x2, y2, radius, **kwargs):
         points = [x1 + radius, y1, x2 - radius, y1, x2, y1, x2, y1 + radius,
@@ -224,18 +204,15 @@ class SilabasGame:
         self.current_syllable_index = 0
 
     def _generate_and_play_audio(self, text, path):
+        if not AUDIO_AVAILABLE: return
         try:
             if not os.path.exists(path):
-                # Si es corto y raro, deletrear (simplificado)
-                tts_text = text.lower()
-                tts = gTTS(text=tts_text, lang='es', slow=True)
+                tts = gTTS(text=text.lower(), lang='es', slow=True)
                 tts.save(path)
-            
             if pygame.mixer.get_init():
                 pygame.mixer.music.load(path)
                 pygame.mixer.music.play()
-        except Exception as e:
-            print(f"Audio Error: {e}")
+        except: pass
 
     def play_syllable_audio(self, syllable):
         clean_name = "".join(c for c in syllable.lower() if c.isalnum())
@@ -251,34 +228,37 @@ class SilabasGame:
     def update_display(self):
         if not self.current_word_list:
             self.shuffle_words()
-        
         data = self.current_word_list[self.current_word_index]
         syls = data["syllables"]
-        
         if self.current_syllable_index >= len(syls):
             self.current_syllable_index = 0
-
         txt = syls[self.current_syllable_index]
         self.syllable_label.config(text=txt)
-        self.syllable_count_label.config(text=f"{self.current_syllable_index + 1}/{len(syls)}")
-
+        self.syllable_count_label.config(text=f"Sílaba {self.current_syllable_index + 1} de {len(syls)}")
         self.load_word_image(data["image"])
         self.play_syllable_audio(txt)
 
     def load_word_image(self, filename):
-        path = os.path.join(SCRIPT_DIR, filename)
-        if os.path.exists(path):
-            try:
-                img = Image.open(path)
-                aspect = img.width / img.height
-                new_h = int(self.image_width / aspect)
-                img_tk = ImageTk.PhotoImage(img.resize((self.image_width, new_h), Image.Resampling.LANCZOS))
-                self.main_image_label.config(image=img_tk, text="")
-                self.main_image_label.image = img_tk
-            except:
-                self.main_image_label.config(image="", text="Error Img")
-        else:
-            self.main_image_label.config(image="", text="No Img")
+        rutas = [
+            os.path.join(SCRIPT_DIR, filename),
+            os.path.join(SCRIPT_DIR, "imagenes", filename),
+            os.path.join(SCRIPT_DIR, "..", "assets", filename)
+        ]
+        found = False
+        for path in rutas:
+            if os.path.exists(path):
+                try:
+                    img = Image.open(path).convert("RGBA")
+                    aspect = img.width / img.height
+                    new_h = int(self.image_width / aspect)
+                    img_tk = ImageTk.PhotoImage(img.resize((self.image_width, new_h), Image.Resampling.LANCZOS))
+                    self.main_image_label.config(image=img_tk, text="")
+                    self.main_image_label.image = img_tk
+                    found = True
+                    break
+                except: pass
+        if not found:
+            self.main_image_label.config(image="", text=f"[Img: {filename}]")
 
     def next_word_or_syllable(self):
         syls = self.current_word_list[self.current_word_index]["syllables"]
@@ -293,38 +273,80 @@ class SilabasGame:
             self.current_syllable_index -= 1
             self.update_display()
 
+    # =================================================================
+    # --- VENTANA DE FELICITACIONES (BOTONES MÁS ARRIBA) ---
+    # =================================================================
     def _show_word_complete_screen(self, word):
         win = tk.Toplevel(self.master)
-        win.title("¡Bien!")
-        w, h = int(400 * self.scale), int(250 * self.scale)
-        win.geometry(f"{w}x{h}")
+        win.overrideredirect(True)
+        win.configure(bg="#FF5757") 
+        
+        w_popup = int(600 * self.scale)
+        h_popup = int(450 * self.scale)
+        
+        sw = self.master.winfo_screenwidth()
+        sh = self.master.winfo_screenheight()
+        x = (sw - w_popup) // 2
+        y = (sh - h_popup) // 2
+        
+        win.geometry(f"{w_popup}x{h_popup}+{x}+{y}")
         win.attributes("-topmost", True)
         win.grab_set()
         
-        frame = tk.Frame(win, bg="white", padx=20, pady=20)
-        frame.pack(fill="both", expand=True)
+        # 1. Fondo Blanco Redondeado
+        popup_canvas = tk.Canvas(win, bg="#FF5757", highlightthickness=0, bd=0)
+        popup_canvas.pack(fill="both", expand=True)
         
-        tk.Label(frame, text="¡Bien Hecho!", font=self.title_font, bg="white", fg="#FF5757").pack(pady=10)
-        tk.Label(frame, text=f"Palabra: {word}", font=self.count_font, bg="white").pack(pady=5)
+        # Margen para el dibujo (para evitar cortes en el borde blanco)
+        margin = 5
+        self.draw_rounded_rect(popup_canvas, margin, margin, w_popup-margin, h_popup-margin, 
+                               radius=int(60 * self.scale), fill="white", outline="white")
         
-        btn_frame = tk.Frame(frame, bg="white")
-        btn_frame.pack(pady=20)
+        # 2. Contenido
+        content_frame = tk.Frame(win, bg="white")
+        pad_inner = int(40 * self.scale)
+        content_frame.place(x=pad_inner, y=pad_inner, width=w_popup-(pad_inner*2), height=h_popup-(pad_inner*2))
+        
+        # Título
+        tk.Label(content_frame, text="¡Felicidades!", font=(SYSTEM_FONT, int(32 * self.scale), "bold"), 
+                 bg="white", fg="#FF6B6B").pack(pady=(5, 5)) # Menos padding arriba
+        
+        # Estrella
+        tk.Label(content_frame, text="⭐", font=(SYSTEM_FONT, int(80 * self.scale)), 
+                 bg="white", fg="#FBC02D").pack(pady=5)
+        
+        # Texto descriptivo
+        tk.Label(content_frame, text="¡Has completado la palabra!", 
+                 font=(SYSTEM_FONT, int(16 * self.scale)), bg="white", fg="#757575").pack(pady=5)
+        
+        # Palabra (REDUJE EL PADDING DE ABAJO PARA SUBIR LOS BOTONES)
+        tk.Label(content_frame, text=word, font=(SYSTEM_FONT, int(40 * self.scale), "bold"), 
+                 bg="white", fg="#FF5757").pack(pady=(10, 5)) 
+        
+        # 3. Botones (REDUJE EL PADDING DEL FRAME PARA SUBIRLOS MÁS)
+        btn_frame = tk.Frame(content_frame, bg="white")
+        btn_frame.pack(pady=5)
         
         def action(act):
             win.destroy()
             if act == "next": self._advance_word()
             elif act == "menu": self.go_to_menu()
             
-        tk.Button(btn_frame, text="Siguiente", bg="#FF6B6B", fg="white", font=self.small_button_font, 
-                  command=lambda: action("next")).pack(side=tk.LEFT, padx=10)
-        tk.Button(btn_frame, text="Menú", bg="#5B84B1", fg="white", font=self.small_button_font, 
-                  command=lambda: action("menu")).pack(side=tk.LEFT, padx=10)
+        w_btn, h_btn = int(150 * self.scale), int(50 * self.scale)
         
-        # Centrar
-        win.update_idletasks()
-        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
-        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
-        win.geometry(f"+{x}+{y}")
+        # Botón Siguiente
+        cv_next = tk.Canvas(btn_frame, bg="white", highlightthickness=0, bd=0, width=w_btn, height=h_btn)
+        self.draw_rounded_rect(cv_next, 5, 5, w_btn-5, h_btn-5, radius=20, fill="#FF6B6B", outline="#FF6B6B")
+        cv_next.create_text(w_btn/2, h_btn/2, text="Siguiente", font=self.button_font, fill="white")
+        cv_next.bind("<Button-1>", lambda e: action("next"))
+        cv_next.pack(side=tk.LEFT, padx=15)
+        
+        # Botón Salir
+        cv_menu = tk.Canvas(btn_frame, bg="white", highlightthickness=0, bd=0, width=w_btn, height=h_btn)
+        self.draw_rounded_rect(cv_menu, 5, 5, w_btn-5, h_btn-5, radius=20, fill="#5B84B1", outline="#5B84B1")
+        cv_menu.create_text(w_btn/2, h_btn/2, text="Salir", font=self.button_font, fill="white")
+        cv_menu.bind("<Button-1>", lambda e: action("menu"))
+        cv_menu.pack(side=tk.LEFT, padx=15)
 
     def _advance_word(self):
         self.previous_word_data = self.current_word_list[self.current_word_index]
@@ -340,20 +362,15 @@ class SilabasGame:
 
     def go_to_menu(self):
         self.master.destroy()
-        # Buscar el menú subiendo carpetas
-        # Estructura esperada: .../simon dice/nivel1/nivel1.py -> .../simon dice/menu/menu_simondice.py
         path = os.path.join(SCRIPT_DIR, "..", "menu", "menu_simondice.py")
         path = os.path.normpath(path)
-        
         if os.path.exists(path):
-            subprocess.Popen([sys.executable, path])
-        else:
-            # Intento fallback
-            path = os.path.join(SCRIPT_DIR, "..", "menu_simondice.py")
-            if os.path.exists(path):
-                subprocess.Popen([sys.executable, path])
+            if SYSTEM_OS == "Windows":
+                subprocess.Popen([sys.executable, path], creationflags=subprocess.DETACHED_PROCESS)
             else:
-                messagebox.showerror("Error", f"Menú no encontrado:\n{path}")
+                subprocess.Popen([sys.executable, path])
+        else:
+            messagebox.showerror("Error", f"Menú no encontrado:\n{path}")
 
 if __name__ == "__main__":
     root = tk.Tk()
