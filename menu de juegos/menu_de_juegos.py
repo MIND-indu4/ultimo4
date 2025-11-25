@@ -13,12 +13,8 @@ ES_WINDOWS = platform.system() == "Windows"
 def get_project_root():
     script_path = os.path.abspath(__file__)
     script_dir = os.path.dirname(script_path)
-    
-    # Si hay una carpeta assets al lado, estamos en la raíz
     if os.path.exists(os.path.join(script_dir, "simondice.png")): 
         return script_dir
-    
-    # Si no, subimos un nivel (por si organizaste en carpetas)
     parent_dir = os.path.dirname(script_dir)
     return parent_dir
 
@@ -30,10 +26,7 @@ def get_safe_path(*path_parts):
 
 # ========== FUENTE (Font) COMPATIBLE ==========
 def get_font_name():
-    if ES_WINDOWS:
-        return "arial.ttf"
-    else:
-        return "DejaVuSans.ttf" 
+    return "arial.ttf" if ES_WINDOWS else "DejaVuSans.ttf"
 
 FONT_NAME = get_font_name()
 
@@ -64,14 +57,21 @@ class GameMenu:
         self.base_height = 800
         self.scale = min(self.screen_width / self.base_width, self.screen_height / self.base_height)
         
-        self.yellow_bg = "#FFDE59"
-        self.white_frame_bg = "#FFFFFF"
+        # --- PALETA DE COLORES ---
+        self.yellow_bg = "#FFDE59"      # Fondo principal
+        self.white_frame_bg = "#FFFFFF" # Tarjeta central
         self.text_color = "#333333"
+        
+        # Colores para bordes de botones
         self.red_border = "#FF4B4B"
         self.pink_border = "#FF69B4"
         self.green_border = "#4CAF50"
         self.blue_border = "#00BFFF"
-        self.menu_bg = "#F5F5F5" 
+        
+        # Colores del Menú Lateral (NUEVOS)
+        self.menu_bg_color = "#FFFFFF"       # Fondo del menú blanco limpio
+        self.menu_header_color = "#FFDE59"   # Cabecera amarilla
+        self.menu_hover_color = "#FFF9C4"    # Amarillo muy suave al pasar el mouse
         
         master.config(bg=self.yellow_bg)
         self.menu_open = False
@@ -234,32 +234,70 @@ class GameMenu:
         text_label.bind("<Button-1>", lambda e: command())
         button_canvas.bind("<Button-1>", lambda e: command())
 
-    # ========== MENÚ LATERAL ==========
+    # ========== MENÚ LATERAL (ESTÉTICO) ==========
     def create_side_menu(self):
-        self.side_menu_frame = Frame(self.master, bg=self.menu_bg, relief="flat")
-        menu_title = Label(self.side_menu_frame, text="MENÚ", 
+        # Marco principal del menú (Fondo blanco)
+        self.side_menu_frame = Frame(self.master, bg=self.menu_bg_color, relief="flat")
+        
+        # Sombra lateral (opcional, simple linea gris)
+        self.menu_shadow = Frame(self.master, bg="#CCCCCC")
+
+        # --- CABECERA DEL MENÚ (AMARILLA) ---
+        self.menu_header = Frame(self.side_menu_frame, bg=self.menu_header_color, height=int(100 * self.scale))
+        self.menu_header.pack(fill="x", side="top")
+        self.menu_header.pack_propagate(False) # Respetar altura fija
+
+        # Título "MENÚ"
+        header_label = Label(self.menu_header, text="MENÚ", 
+                             font=("Arial", int(24 * self.scale), "bold"),
+                             bg=self.menu_header_color, fg=self.text_color)
+        header_label.pack(side="left", padx=int(20 * self.scale), pady=int(20 * self.scale))
+
+        # Botón cerrar menú (X) dentro de la cabecera
+        close_btn = Label(self.menu_header, text="✕", 
                           font=("Arial", int(20 * self.scale), "bold"),
-                          fg=self.text_color, bg=self.menu_bg)
-        menu_title.pack(pady=int(20 * self.scale), padx=int(20 * self.scale))
-        
-        menu_items = [("📊 Estadísticas", self.show_stats), ("⚙️ Ajustes", self.show_settings), ("ℹ️ Acerca de...", self.show_about), ("⏰ temporizador", self.show_clock)]
-        
-        for text, command in menu_items:
-            btn = Button(self.side_menu_frame, text=text, font=("Arial", int(14 * self.scale)),
-                        command=command, bg=self.menu_bg, fg=self.text_color,
-                        activebackground=self.white_frame_bg, activeforeground=self.text_color,
-                        bd=0, relief="flat", anchor="w", padx=int(20 * self.scale))
-            btn.pack(fill="x", pady=int(5 * self.scale), padx=int(10 * self.scale))
+                          bg=self.menu_header_color, fg=self.text_color, cursor="hand2")
+        close_btn.pack(side="right", padx=int(20 * self.scale))
+        close_btn.bind("<Button-1>", lambda e: self.close_side_menu())
+
+        # --- CONTENIDO DEL MENÚ ---
+        self.menu_content = Frame(self.side_menu_frame, bg=self.menu_bg_color)
+        self.menu_content.pack(fill="both", expand=True, pady=int(20 * self.scale))
+
+        # Opciones del menú usando helper para estilo consistente
+        self._create_menu_item(self.menu_content, "📡  Conectividad", self.show_connectivity)
+        self._create_menu_item(self.menu_content, "ℹ️  Acerca de...", self.show_about)
+        self._create_menu_item(self.menu_content, "⏰  Temporizador", self.show_clock)
+
+        # Logo o pie de página opcional (espacio vacío abajo)
+        spacer = Frame(self.side_menu_frame, bg=self.menu_bg_color, height=50)
+        spacer.pack(side="bottom", fill="x")
+
+    def _create_menu_item(self, parent, text, command):
+        """ Crea un botón de menú estético con efecto hover """
+        # Contenedor del botón (para márgenes)
+        container = Frame(parent, bg=self.menu_bg_color)
+        container.pack(fill="x", pady=2) # Espacio vertical pequeño entre botones
+
+        # El "Botón" es un Label grande con padding
+        btn_label = Label(container, text=text, 
+                          font=("Arial", int(16 * self.scale)),
+                          bg=self.menu_bg_color, fg=self.text_color,
+                          anchor="w", padx=int(30 * self.scale), pady=int(15 * self.scale),
+                          cursor="hand2")
+        btn_label.pack(fill="x")
+
+        # Efectos Hover
+        def on_enter(e):
+            btn_label.config(bg=self.menu_hover_color, font=("Arial", int(16 * self.scale), "bold"))
+            # Opcional: añadir una barrita de color a la izquierda
             
-        separator = Frame(self.side_menu_frame, bg="#CCCCCC", height=2)
-        separator.pack(fill="x", padx=int(20 * self.scale), pady=int(20 * self.scale))
-        
-        logout_btn = Button(self.side_menu_frame, text="🚪 Salir del Sistema", 
-                           font=("Arial", int(14 * self.scale), "bold"),
-                           command=self.exit_application, bg=self.red_border, fg="white",
-                           activebackground=self.red_border, activeforeground="white",
-                           bd=0, relief="flat", padx=int(20 * self.scale), pady=int(10 * self.scale))
-        logout_btn.pack(fill="x", padx=int(20 * self.scale), pady=int(10 * self.scale))
+        def on_leave(e):
+            btn_label.config(bg=self.menu_bg_color, font=("Arial", int(16 * self.scale)))
+
+        btn_label.bind("<Enter>", on_enter)
+        btn_label.bind("<Leave>", on_leave)
+        btn_label.bind("<Button-1>", lambda e: command())
 
     def toggle_side_menu(self):
         if self.menu_open: self.close_side_menu()
@@ -268,46 +306,56 @@ class GameMenu:
     def open_side_menu(self):
         self.menu_open = True
         if hasattr(self, 'menu_btn'): self.menu_btn.config(state="disabled")
-        menu_width = int(300 * self.scale)
-        menu_height = self.screen_height
-        self.side_menu_frame.place(x=0, y=0, width=menu_width, height=menu_height)
         
-        close_menu_btn = Button(self.side_menu_frame, text="✕", font=("Arial", int(18 * self.scale), "bold"),
-                               command=self.close_side_menu, bg=self.menu_bg, fg=self.text_color,
-                               activebackground=self.menu_bg, activeforeground="red", bd=0, relief="flat")
-        close_menu_btn.place(x=menu_width - int(40 * self.scale), y=int(10 * self.scale))
+        menu_width = int(350 * self.scale) # Un poco más ancho para verse mejor
+        menu_height = self.screen_height
+        
+        # Mostrar sombra (borde derecho)
+        self.menu_shadow.place(x=menu_width, y=0, width=2, height=menu_height)
+        # Mostrar menú
+        self.side_menu_frame.place(x=0, y=0, width=menu_width, height=menu_height)
+        self.side_menu_frame.lift()
+        
+        # Bind clic fuera
         self.master.bind("<Button-1>", self.check_click_outside_menu)
 
     def close_side_menu(self):
         self.menu_open = False
         self.side_menu_frame.place_forget()
+        self.menu_shadow.place_forget()
         if hasattr(self, 'menu_btn'): self.menu_btn.config(state="normal")
         self.master.unbind("<Button-1>")
 
     def check_click_outside_menu(self, event):
-        if event.widget != self.menu_btn:
-            menu_width = self.side_menu_frame.winfo_width()
-            if event.x > menu_width: self.close_side_menu()
+        # Evitar cerrar si se hace clic en el botón de abrir menú
+        if event.widget == self.menu_btn or self.menu_btn in event.widget.master.winfo_children():
+            return
+
+        menu_width = self.side_menu_frame.winfo_width()
+        if event.x > menu_width: 
+            self.close_side_menu()
 
     def create_corner_buttons(self):
+        # Botón Hamburguesa (Izquierda)
         if self.icons.get("menu"):
             self.menu_btn = tk.Button(self.master, image=self.icons["menu"], command=self.toggle_side_menu,
-                                      bd=0, bg=self.yellow_bg, activebackground=self.yellow_bg, relief="flat")
+                                      bd=0, bg=self.yellow_bg, activebackground=self.yellow_bg, relief="flat", cursor="hand2")
         else:
-            self.menu_btn = tk.Button(self.master, text="☰ MENU", command=self.toggle_side_menu,
-                                    font=("Arial", int(14 * self.scale), "bold"), bg=self.yellow_bg, bd=0, 
-                                    fg=self.text_color, activebackground=self.yellow_bg, activeforeground=self.text_color)
+            self.menu_btn = tk.Button(self.master, text="☰", command=self.toggle_side_menu,
+                                    font=("Arial", int(20 * self.scale), "bold"), bg=self.yellow_bg, bd=0, 
+                                    fg=self.text_color, activebackground=self.yellow_bg, cursor="hand2")
         
+        # Botón Cerrar App (Derecha) - Mantenemos el original
         if self.icons.get("close"):
             self.close_btn = tk.Button(self.master, image=self.icons["close"], command=self.exit_application,
-                                       bd=0, bg=self.yellow_bg, activebackground=self.yellow_bg, relief="flat")
+                                       bd=0, bg=self.yellow_bg, activebackground=self.yellow_bg, relief="flat", cursor="hand2")
         else:
-            self.close_btn = tk.Button(self.master, text="✕ SALIR", command=self.exit_application,
-                                    font=("Arial", int(14 * self.scale), "bold"), fg="#D32F2F", bg=self.yellow_bg,
-                                    activebackground=self.yellow_bg, bd=0, padx=int(10 * self.scale), pady=int(5 * self.scale))
+            self.close_btn = tk.Button(self.master, text="✕", command=self.exit_application,
+                                    font=("Arial", int(18 * self.scale), "bold"), fg="#D32F2F", bg=self.yellow_bg,
+                                    activebackground=self.yellow_bg, bd=0, cursor="hand2")
 
     def position_corner_buttons(self):
-        button_padding = int(35 * self.scale)
+        button_padding = int(30 * self.scale)
         self.master.update_idletasks()
         if hasattr(self, 'menu_btn'): self.menu_btn.place(x=button_padding, y=button_padding)
         if hasattr(self, 'close_btn'):
@@ -357,12 +405,8 @@ class GameMenu:
             print(f"Error al abrir juego: {e}")
 
     # ========== OPCIONES DE MENÚ ==========
-    def show_stats(self):
-        messagebox.showinfo("Estadísticas", "Próximamente: Estadísticas de juego")
-        self.close_side_menu()
-
-    def show_settings(self):
-        messagebox.showinfo("Ajustes", "Próximamente: Panel de configuración")
+    def show_connectivity(self):
+        messagebox.showinfo("Conectividad", "Próximamente: Opciones de conectividad y red.")
         self.close_side_menu()
 
     # --- NUEVA LÓGICA DE ACERCA DE ---
