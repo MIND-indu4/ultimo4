@@ -16,11 +16,17 @@ def get_system_font():
 
 SYSTEM_FONT = get_system_font()
 
-# --- CONFIGURACIÓN ---
+# --- CONFIGURACIÓN VISUAL (NIVEL 5) ---
 class GameConfig:
+    # Colores
     MAIN_COLOR = "#00C853"       # Verde vibrante
+    HOVER_COLOR = "#66BB6A"
     TEXT_DARK = "#212121"
     CARD_COLOR = "white"
+    
+    # Colores Ventana Victoria
+    BTN_MENU_COLOR = "#5B84B1"
+    BTN_NEXT_COLOR = "#00C853"
     
     # Imágenes (Verduras y Frutas)
     IMAGENES = [
@@ -33,27 +39,24 @@ class GameConfig:
     ]
 
 # --- FUNCIONES AUXILIARES ---
-def create_rounded_rectangle(canvas, x1, y1, x2, y2, radius, **kwargs):
-    points = [x1 + radius, y1, x2 - radius, y1, x2, y1, x2, y1 + radius,
-              x2, y2 - radius, x2, y2, x2 - radius, y2, x1 + radius, y2,
-              x1, y2, x1, y2 - radius, x1, y1 + radius, x1, y1]
-    return canvas.create_polygon(points, smooth=True, **kwargs)
-
 class MathDragGameLevel5:
     def __init__(self, master):
         self.master = master
         master.title("Matemáticas - Nivel 5: Completar Suma")
         
-        # ==========================================
-        # --- BLOQUE DE PANTALLA COMPLETA ---
-        # ==========================================
-        master.attributes("-fullscreen", True)
-        master.bind("<Escape>", lambda e: master.attributes("-fullscreen", False))
-        
-        master.configure(bg=GameConfig.MAIN_COLOR)
-        
-        # IMPORTANTE: Forzar actualización para leer bien el tamaño en Raspberry
+        # --- CONFIGURACIÓN PANTALLA ---
         master.update_idletasks() 
+        
+        if SYSTEM_OS == "Windows":
+            master.attributes("-fullscreen", True)
+        else:
+            w = master.winfo_screenwidth()
+            h = master.winfo_screenheight()
+            master.geometry(f"{w}x{h}+0+0")
+            master.after(100, lambda: master.attributes("-fullscreen", True))
+            
+        master.configure(bg=GameConfig.MAIN_COLOR)
+        master.bind("<Escape>", self.volver_al_menu)
 
         # Escala dinámica
         screen_width = master.winfo_screenwidth()
@@ -66,6 +69,7 @@ class MathDragGameLevel5:
         self.font_title = (SYSTEM_FONT, int(32 * self.scale), "bold")
         self.font_signos = (SYSTEM_FONT, int(60 * self.scale), "bold") 
         self.font_btn = (SYSTEM_FONT, int(14 * self.scale), "bold")
+        self.font_win_title = (SYSTEM_FONT, int(40 * self.scale), "bold")
         
         # Tamaño de las cajas
         self.box_size = int(140 * self.scale) 
@@ -76,29 +80,24 @@ class MathDragGameLevel5:
         self._start_new_round()
 
     def _create_gui(self):
-        # Canvas Principal
         self.main_canvas = tk.Canvas(self.master, bg=GameConfig.MAIN_COLOR, highlightthickness=0)
         self.main_canvas.pack(fill="both", expand=True)
 
         sw = self.master.winfo_screenwidth()
         sh = self.master.winfo_screenheight()
         
-        # La tarjeta ocupa el 85% de la pantalla
         cw = int(sw * 0.85)
         ch = int(sh * 0.85)
-        
-        # Centro de la pantalla
         cx = sw // 2
         cy = sh // 2
         
-        # Guardamos dimensiones para cálculos posteriores
         self.ancho_real_frame = cw - 40 
         self.alto_real_frame = ch - 40
 
-        # Dibujar Tarjeta Blanca
-        create_rounded_rectangle(self.main_canvas, cx - cw//2, cy - ch//2, cx + cw//2, cy + ch//2, radius=40, fill=GameConfig.CARD_COLOR)
+        # Fondo blanco redondeado simétrico
+        self._draw_rounded_rectangle(self.main_canvas, cx - cw//2, cy - ch//2, cx + cw//2, cy + ch//2, radius=40, fill=GameConfig.CARD_COLOR, outline="")
 
-        # Frame contenido (encima del dibujo)
+        # Frame contenido
         self.content_frame = tk.Frame(self.main_canvas, bg=GameConfig.CARD_COLOR)
         self.content_frame.place(x=cx - cw//2 + 20, y=cy - ch//2 + 20, width=self.ancho_real_frame, height=self.alto_real_frame)
 
@@ -134,11 +133,28 @@ class MathDragGameLevel5:
         self.lbl_total = tk.Label(self.frame_ecuacion, bg="white", bd=2, relief="solid")
         self.lbl_total.grid(row=0, column=4, padx=20)
 
+    # --- DIBUJO SIMÉTRICO ---
+    def _draw_rounded_rectangle(self, canvas, x1, y1, x2, y2, radius, **kwargs):
+        points = [
+            (x1 + radius, y1), (x1 + radius, y1),
+            (x2 - radius, y1), (x2 - radius, y1),
+            (x2, y1),
+            (x2, y1 + radius), (x2, y1 + radius),
+            (x2, y2 - radius), (x2, y2 - radius),
+            (x2, y2),
+            (x2 - radius, y2), (x2 - radius, y2),
+            (x1 + radius, y2), (x1 + radius, y2),
+            (x1, y2),
+            (x1, y2 - radius), (x1, y2 - radius),
+            (x1, y1 + radius), (x1, y1 + radius),
+            (x1, y1)
+        ]
+        return canvas.create_polygon(points, smooth=True, **kwargs)
+
     def _start_new_round(self):
-        # Limpiar fichas anteriores
+        # Limpiar
         for widget in self.content_frame.winfo_children():
-            if hasattr(widget, "es_opcion_juego"):
-                widget.destroy()
+            if hasattr(widget, "es_opcion_juego"): widget.destroy()
 
         # Reiniciar Target
         self.img_slot_vacio = self.crear_imagen_slot_vacio()
@@ -184,7 +200,7 @@ class MathDragGameLevel5:
         
         random.shuffle(opciones)
 
-        # 4. Dibujar Fichas Abajo (Calculado robustamente)
+        # 4. Dibujar Fichas
         y_pos = self.alto_real_frame - int(180 * self.scale)
         zona_width = self.ancho_real_frame // 5
         
@@ -196,7 +212,6 @@ class MathDragGameLevel5:
             lbl.es_correcta = op["correcta"]
             lbl.es_opcion_juego = True
             
-            # Centrar horizontalmente en su zona
             x_pos = (i * zona_width) + (zona_width // 2) - (self.box_size // 2)
             
             lbl.place(x=x_pos, y=y_pos)
@@ -221,7 +236,6 @@ class MathDragGameLevel5:
         widget = self.drag_data["item"]
         if not widget: return
         
-        # Coordenadas relativas al frame contenedor
         x_root = event.x_root
         y_root = event.y_root
         frame_x = self.content_frame.winfo_rootx()
@@ -240,7 +254,6 @@ class MathDragGameLevel5:
         drop_x = widget.winfo_rootx() + (widget.winfo_width() // 2)
         drop_y = widget.winfo_rooty() + (widget.winfo_height() // 2)
 
-        # Verificar colisión con el TARGET
         target = self.lbl_target
         tx1 = target.winfo_rootx()
         ty1 = target.winfo_rooty()
@@ -249,14 +262,13 @@ class MathDragGameLevel5:
 
         if tx1 < drop_x < tx2 and ty1 < drop_y < ty2:
             if widget.es_correcta:
-                # Calcular posición centrada en el target relativo al content_frame
                 final_x = tx1 - self.content_frame.winfo_rootx() + (target.winfo_width() - widget.winfo_width()) // 2
                 final_y = ty1 - self.content_frame.winfo_rooty() + (target.winfo_height() - widget.winfo_height()) // 2
                 
                 widget.place(x=final_x, y=final_y)
                 widget.bloqueado = True
                 
-                self.master.after(300, self.game_win)
+                self.master.after(300, self._show_win_screen)
             else:
                 self.return_to_home(widget)
         else:
@@ -265,27 +277,65 @@ class MathDragGameLevel5:
     def return_to_home(self, widget):
         widget.place(x=widget.home_x, y=widget.home_y)
 
-    def game_win(self):
+    # =============================================================
+    # PANTALLA DE FELICITACIÓN MEJORADA (VERDE)
+    # =============================================================
+    def _show_win_screen(self):
         win = tk.Toplevel(self.master)
-        win.title("¡Ganaste!")
-        w, h = 400, 280
-        cx = self.master.winfo_screenwidth() // 2
-        cy = self.master.winfo_screenheight() // 2
-        win.geometry(f"{w}x{h}+{cx-w//2}+{cy-h//2}")
-        win.configure(bg="white")
         win.overrideredirect(True)
         win.attributes("-topmost", True)
+        win.grab_set()
 
-        tk.Frame(win, bg=GameConfig.MAIN_COLOR, height=15).pack(fill="x")
-        tk.Label(win, text="¡Excelente!", font=("Arial", 26, "bold"), bg="white", fg=GameConfig.MAIN_COLOR).pack(pady=(30, 10))
-        tk.Label(win, text="¡Completaste la suma!", font=("Arial", 14), bg="white", fg="#555").pack(pady=10)
+        w, h = int(500 * self.scale), int(350 * self.scale)
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
+        win.geometry(f"{w}x{h}+{x}+{y}")
         
-        btn = tk.Label(win, text="Siguiente Ejercicio", font=("Arial", 14, "bold"),
-                       bg=GameConfig.MAIN_COLOR, fg="white", padx=20, pady=10, cursor="hand2")
-        btn.pack(pady=20)
-        btn.bind("<Button-1>", lambda e: [win.destroy(), self._start_new_round()])
+        border_color = GameConfig.MAIN_COLOR 
+        win.configure(bg=border_color)
 
-    # --- GENERADORES DE IMÁGENES ---
+        canvas = tk.Canvas(win, width=w, height=h, bg=border_color, highlightthickness=0)
+        canvas.pack(fill="both", expand=True)
+        
+        self._draw_rounded_rectangle(canvas, 10, 10, w-10, h-10, radius=20, fill="white", outline="white")
+        
+        tk.Label(win, text="¡Muy Bien!", font=self.font_win_title, bg="white", fg=GameConfig.MAIN_COLOR).place(relx=0.5, rely=0.25, anchor="center")
+        
+        sub_font = (SYSTEM_FONT, int(16 * self.scale))
+        tk.Label(win, text="¡Completaste la operación! ➕", font=sub_font, bg="white", fg=GameConfig.TEXT_DARK).place(relx=0.5, rely=0.5, anchor="center")
+        
+        btn_container = tk.Frame(win, bg="white")
+        btn_container.place(relx=0.5, rely=0.75, anchor="center")
+        
+        def action(act):
+            win.destroy()
+            if act == "next": self._start_new_round()
+            elif act == "menu": self.volver_al_menu()
+            
+        def on_enter_green(e): e.widget['bg'] = GameConfig.HOVER_COLOR
+        def on_leave_green(e): e.widget['bg'] = GameConfig.BTN_NEXT_COLOR
+        
+        def on_enter_blue(e): e.widget['bg'] = '#7FA6D6'
+        def on_leave_blue(e): e.widget['bg'] = GameConfig.BTN_MENU_COLOR
+
+        btn_menu = tk.Button(btn_container, text="Menú 🏠", font=self.font_btn,
+                             bg=GameConfig.BTN_MENU_COLOR, fg="white", 
+                             relief="flat", cursor="hand2", padx=20, pady=10,
+                             command=lambda: action("menu"))
+        btn_menu.pack(side=tk.LEFT, padx=15)
+        btn_menu.bind("<Enter>", on_enter_blue)
+        btn_menu.bind("<Leave>", on_leave_blue)
+
+        btn_next = tk.Button(btn_container, text="Siguiente ➡", font=self.font_btn,
+                             bg=GameConfig.BTN_NEXT_COLOR, fg="white", 
+                             relief="flat", cursor="hand2", padx=20, pady=10,
+                             command=lambda: action("next"))
+        btn_next.pack(side=tk.LEFT, padx=15)
+        btn_next.bind("<Enter>", on_enter_green)
+        btn_next.bind("<Leave>", on_leave_green)
+    # =============================================================
+
+    # --- GENERADORES ---
     def crear_imagen_verdura(self, nombre_archivo, cantidad, es_opcion=False):
         s = self.box_size
         canvas_img = Image.new("RGB", (s, s), "white")
@@ -293,7 +343,6 @@ class MathDragGameLevel5:
         
         color_borde = GameConfig.MAIN_COLOR if es_opcion else GameConfig.TEXT_DARK
         w_borde = 3 if es_opcion else 2
-        
         draw.rectangle([0, 0, s-1, s-1], outline=color_borde, width=w_borde)
 
         item_img = None
