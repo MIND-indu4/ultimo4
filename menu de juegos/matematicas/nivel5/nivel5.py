@@ -18,7 +18,7 @@ SYSTEM_FONT = get_system_font()
 
 # --- CONFIGURACIÓN ---
 class GameConfig:
-    MAIN_COLOR = "#00C853"       # Verde vibrante (Material Green A700)
+    MAIN_COLOR = "#00C853"       # Verde vibrante
     TEXT_DARK = "#212121"
     CARD_COLOR = "white"
     
@@ -44,13 +44,16 @@ class MathDragGameLevel5:
         self.master = master
         master.title("Matemáticas - Nivel 5: Completar Suma")
         
-        if SYSTEM_OS == "Windows":
-            master.attributes("-fullscreen", True)
-        else:
-            master.attributes("-fullscreen", True)
-            
+        # ==========================================
+        # --- BLOQUE DE PANTALLA COMPLETA ---
+        # ==========================================
+        master.attributes("-fullscreen", True)
+        master.bind("<Escape>", lambda e: master.attributes("-fullscreen", False))
+        
         master.configure(bg=GameConfig.MAIN_COLOR)
-        master.bind("<Escape>", self.volver_al_menu)
+        
+        # IMPORTANTE: Forzar actualización para leer bien el tamaño en Raspberry
+        master.update_idletasks() 
 
         # Escala dinámica
         screen_width = master.winfo_screenwidth()
@@ -61,7 +64,7 @@ class MathDragGameLevel5:
 
         # Fuentes
         self.font_title = (SYSTEM_FONT, int(32 * self.scale), "bold")
-        self.font_signos = (SYSTEM_FONT, int(60 * self.scale), "bold") # Signos grandes
+        self.font_signos = (SYSTEM_FONT, int(60 * self.scale), "bold") 
         self.font_btn = (SYSTEM_FONT, int(14 * self.scale), "bold")
         
         # Tamaño de las cajas
@@ -79,19 +82,25 @@ class MathDragGameLevel5:
 
         sw = self.master.winfo_screenwidth()
         sh = self.master.winfo_screenheight()
+        
+        # La tarjeta ocupa el 85% de la pantalla
         cw = int(sw * 0.85)
         ch = int(sh * 0.85)
+        
+        # Centro de la pantalla
         cx = sw // 2
         cy = sh // 2
         
+        # Guardamos dimensiones para cálculos posteriores
         self.ancho_real_frame = cw - 40 
+        self.alto_real_frame = ch - 40
 
-        # Tarjeta Blanca
+        # Dibujar Tarjeta Blanca
         create_rounded_rectangle(self.main_canvas, cx - cw//2, cy - ch//2, cx + cw//2, cy + ch//2, radius=40, fill=GameConfig.CARD_COLOR)
 
-        # Frame contenido
+        # Frame contenido (encima del dibujo)
         self.content_frame = tk.Frame(self.main_canvas, bg=GameConfig.CARD_COLOR)
-        self.content_frame.place(x=cx - cw//2 + 20, y=cy - ch//2 + 20, width=self.ancho_real_frame, height=ch-40)
+        self.content_frame.place(x=cx - cw//2 + 20, y=cy - ch//2 + 20, width=self.ancho_real_frame, height=self.alto_real_frame)
 
         # Botón Menú
         self.btn_menu = tk.Label(self.content_frame, text="⬅ Menú", font=self.font_btn, 
@@ -104,7 +113,6 @@ class MathDragGameLevel5:
                  bg=GameConfig.CARD_COLOR, fg=GameConfig.MAIN_COLOR).pack(pady=(20, 40))
 
         # --- ÁREA DE ECUACIÓN (Arriba) ---
-        # Estructura: [Caja] + [TARGET] = [Caja]
         self.frame_ecuacion = tk.Frame(self.content_frame, bg=GameConfig.CARD_COLOR)
         self.frame_ecuacion.pack(pady=20)
 
@@ -116,7 +124,6 @@ class MathDragGameLevel5:
         tk.Label(self.frame_ecuacion, text="+", font=self.font_signos, bg=GameConfig.CARD_COLOR, fg="black").grid(row=0, column=1)
         
         # 2. TARGET (La incógnita)
-        # Aquí es donde el niño debe soltar la imagen
         self.lbl_target = tk.Label(self.frame_ecuacion, bg="#EEEEEE", bd=2, relief="solid")
         self.lbl_target.grid(row=0, column=2, padx=20)
         
@@ -142,11 +149,8 @@ class MathDragGameLevel5:
         # 1. Lógica Matemática
         self.item_type = random.choice(GameConfig.IMAGENES)
         
-        # Generar números (Total hasta 9 para que entre en la grilla)
         self.total_num = random.randint(2, 9)
-        # El primer número debe ser menor al total
         self.num1 = random.randint(1, self.total_num - 1)
-        # Lo que falta (la respuesta correcta)
         self.missing_num = self.total_num - self.num1
 
         # 2. Actualizar Pantalla
@@ -158,15 +162,11 @@ class MathDragGameLevel5:
         self.lbl_total.config(image=img_total)
         self.lbl_total.image = img_total
 
-        # 3. Generar Opciones (Fichas de imágenes abajo)
+        # 3. Generar Opciones
         opciones = []
-        
-        # Opción Correcta
         opciones.append({"cant": self.missing_num, "tipo": self.item_type, "correcta": True})
         
-        # Distractores (Necesitamos 4 más para tener 5 opciones como en la foto)
         while len(opciones) < 5:
-            # Distractor puede ser: Cantidad incorrecta O Tipo incorrecto
             es_tipo_correcto = random.choice([True, False])
             
             if es_tipo_correcto:
@@ -175,9 +175,8 @@ class MathDragGameLevel5:
             else:
                 cant = random.randint(1, 9)
                 tipo = random.choice(GameConfig.IMAGENES)
-                if tipo == self.item_type: tipo = "banana.png" # Fallback forzado
+                if tipo == self.item_type: tipo = "banana.png"
             
-            # Evitar duplicados exactos de la correcta
             if cant == self.missing_num and tipo == self.item_type:
                 continue
                 
@@ -185,12 +184,9 @@ class MathDragGameLevel5:
         
         random.shuffle(opciones)
 
-        # 4. Dibujar Fichas Abajo
-        frame_w = self.ancho_real_frame 
-        y_pos = self.content_frame.winfo_height() - int(180 * self.scale)
-        if y_pos < 0: y_pos = int(self.master.winfo_screenheight() * 0.85) - int(200 * self.scale)
-
-        zona_width = frame_w // 5 # Dividir en 5 zonas
+        # 4. Dibujar Fichas Abajo (Calculado robustamente)
+        y_pos = self.alto_real_frame - int(180 * self.scale)
+        zona_width = self.ancho_real_frame // 5
         
         for i, op in enumerate(opciones):
             img_op = self.crear_imagen_verdura(op["tipo"], op["cant"], es_opcion=True)
@@ -200,7 +196,7 @@ class MathDragGameLevel5:
             lbl.es_correcta = op["correcta"]
             lbl.es_opcion_juego = True
             
-            # Centrar
+            # Centrar horizontalmente en su zona
             x_pos = (i * zona_width) + (zona_width // 2) - (self.box_size // 2)
             
             lbl.place(x=x_pos, y=y_pos)
@@ -225,14 +221,9 @@ class MathDragGameLevel5:
         widget = self.drag_data["item"]
         if not widget: return
         
-        mx = self.content_frame.winfo_pointerx() - self.content_frame.winfo_rootx()
-        my = self.content_frame.winfo_pointery() - self.content_frame.winfo_rooty()
-        
-        # Mover suavemente centrado o con offset
-        # Usamos el cálculo del Nivel 4 que funcionó bien
+        # Coordenadas relativas al frame contenedor
         x_root = event.x_root
         y_root = event.y_root
-        
         frame_x = self.content_frame.winfo_rootx()
         frame_y = self.content_frame.winfo_rooty()
         
@@ -249,23 +240,20 @@ class MathDragGameLevel5:
         drop_x = widget.winfo_rootx() + (widget.winfo_width() // 2)
         drop_y = widget.winfo_rooty() + (widget.winfo_height() // 2)
 
-        # Verificar colisión con el TARGET central
-        tx1 = self.lbl_target.winfo_rootx()
-        ty1 = self.lbl_target.winfo_rooty()
-        tx2 = tx1 + self.lbl_target.winfo_width()
-        ty2 = ty1 + self.lbl_target.winfo_height()
+        # Verificar colisión con el TARGET
+        target = self.lbl_target
+        tx1 = target.winfo_rootx()
+        ty1 = target.winfo_rooty()
+        tx2 = tx1 + target.winfo_width()
+        ty2 = ty1 + target.winfo_height()
 
         if tx1 < drop_x < tx2 and ty1 < drop_y < ty2:
             if widget.es_correcta:
-                # Posicionar
-                final_x = tx1 - self.content_frame.winfo_rootx()
-                final_y = ty1 - self.content_frame.winfo_rooty()
+                # Calcular posición centrada en el target relativo al content_frame
+                final_x = tx1 - self.content_frame.winfo_rootx() + (target.winfo_width() - widget.winfo_width()) // 2
+                final_y = ty1 - self.content_frame.winfo_rooty() + (target.winfo_height() - widget.winfo_height()) // 2
                 
-                # Centrar
-                ox = (self.lbl_target.winfo_width() - widget.winfo_width()) // 2
-                oy = (self.lbl_target.winfo_height() - widget.winfo_height()) // 2
-                
-                widget.place(x=final_x + ox, y=final_y + oy)
+                widget.place(x=final_x, y=final_y)
                 widget.bloqueado = True
                 
                 self.master.after(300, self.game_win)
@@ -299,19 +287,16 @@ class MathDragGameLevel5:
 
     # --- GENERADORES DE IMÁGENES ---
     def crear_imagen_verdura(self, nombre_archivo, cantidad, es_opcion=False):
-        """Genera imagen de grupo de verduras (Reutilizando lógica robusta de Nivel 2)"""
         s = self.box_size
         canvas_img = Image.new("RGB", (s, s), "white")
         draw = ImageDraw.Draw(canvas_img)
         
-        # Borde de color según si es opción o parte de la ecuación
         color_borde = GameConfig.MAIN_COLOR if es_opcion else GameConfig.TEXT_DARK
         w_borde = 3 if es_opcion else 2
         
         draw.rectangle([0, 0, s-1, s-1], outline=color_borde, width=w_borde)
 
         item_img = None
-        # Búsqueda de archivos
         base = os.path.splitext(nombre_archivo)[0]
         exts = [".png", ".jpg", ".jpeg"]
         rutas = []
@@ -320,7 +305,7 @@ class MathDragGameLevel5:
             rutas.append(f)
             rutas.append(os.path.join("imagenes", f))
             rutas.append(os.path.join("assets", f))
-            rutas.append(os.path.join("..", "nivel1", f)) # Buscar en niveles anteriores
+            rutas.append(os.path.join("..", "nivel1", f)) 
             rutas.append(os.path.join("..", "nivel2", f))
 
         for r in rutas:
@@ -330,13 +315,10 @@ class MathDragGameLevel5:
                     break
                 except: pass
 
-        # Grilla 2x2 o 3x3
         if cantidad <= 4:
-            cols = 2
-            rows = 2
+            cols = 2; rows = 2
         else:
-            cols = 3
-            rows = 3
+            cols = 3; rows = 3
         
         cell_w = s // cols
         cell_h = s // rows 
@@ -364,7 +346,6 @@ class MathDragGameLevel5:
                 off_y = (th - new_h)//2
                 canvas_img.paste(img_res, (x+off_x, y+off_y), img_res)
             else:
-                # Fallback Círculo perfecto
                 diam = min(tw, th)
                 off_x = (tw - diam) // 2
                 off_y = (th - diam) // 2
@@ -376,13 +357,12 @@ class MathDragGameLevel5:
     def crear_imagen_slot_vacio(self):
         s = self.box_size
         img = Image.new("RGB", (s, s), "white") 
-        # Podríamos no dibujar nada para que sea blanco puro, 
-        # pero dibujaremos un borde sutil para saber que ahí va algo
         return ImageTk.PhotoImage(img)
 
     def volver_al_menu(self, event=None):
         ruta_actual = os.path.dirname(os.path.abspath(__file__))
         ruta_menu = os.path.join(ruta_actual, "..", "menu", "menumatematicas.py")
+        ruta_menu = os.path.normpath(ruta_menu)
         
         if os.path.exists(ruta_menu):
             self.master.destroy()

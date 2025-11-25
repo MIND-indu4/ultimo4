@@ -18,7 +18,7 @@ SYSTEM_FONT = get_system_font()
 
 # --- CONFIGURACIÓN VISUAL ---
 class GameConfig:
-    MAIN_COLOR = "#4CAF50"       # Verde
+    MAIN_COLOR = "#4CAF50"       # Verde Material Design
     TEXT_DARK = "#212121"
     CARD_COLOR = "white"
     DIVIDER_COLOR = "#A5D6A7"    # Verde claro para líneas divisorias
@@ -38,13 +38,16 @@ class MathDragGameLevel4:
         self.master = master
         master.title("Matemáticas - Nivel 4")
         
-        if SYSTEM_OS == "Windows":
-            master.attributes("-fullscreen", True)
-        else:
-            master.attributes("-fullscreen", True)
-            
+        # ==========================================
+        # --- BLOQUE DE PANTALLA COMPLETA ---
+        # ==========================================
+        master.attributes("-fullscreen", True)
+        master.bind("<Escape>", lambda e: master.attributes("-fullscreen", False))
+        
         master.configure(bg=GameConfig.MAIN_COLOR)
-        master.bind("<Escape>", self.volver_al_menu)
+        
+        # IMPORTANTE: Forzar actualización para leer dimensiones reales en Raspberry
+        master.update_idletasks() 
 
         # Escala dinámica
         screen_width = master.winfo_screenwidth()
@@ -60,7 +63,7 @@ class MathDragGameLevel4:
         
         # Tamaños
         self.ball_size = int(50 * self.scale) # Pelotas un poco más chicas para que entren varias
-        self.box_size = int(100 * self.scale) # Fichas de números
+        self.box_size = int(90 * self.scale)  # Fichas de números
         
         self.drag_data = {"item": None, "offset_x": 0, "offset_y": 0}
         
@@ -77,17 +80,22 @@ class MathDragGameLevel4:
 
         sw = self.master.winfo_screenwidth()
         sh = self.master.winfo_screenheight()
+        
+        # Tarjeta blanca: 90% de la pantalla
         cw = int(sw * 0.90)
         ch = int(sh * 0.90)
         cx = sw // 2
         cy = sh // 2
         
         self.ancho_real_frame = cw - 40
+        self.alto_real_frame = ch - 40
 
+        # Fondo blanco redondeado
         create_rounded_rectangle(self.main_canvas, cx - cw//2, cy - ch//2, cx + cw//2, cy + ch//2, radius=40, fill=GameConfig.CARD_COLOR)
 
+        # Frame contenido (encima del dibujo)
         self.content_frame = tk.Frame(self.main_canvas, bg=GameConfig.CARD_COLOR)
-        self.content_frame.place(x=cx - cw//2 + 20, y=cy - ch//2 + 20, width=self.ancho_real_frame, height=ch-40)
+        self.content_frame.place(x=cx - cw//2 + 20, y=cy - ch//2 + 20, width=self.ancho_real_frame, height=self.alto_real_frame)
 
         # Botón Menú
         self.btn_menu = tk.Label(self.content_frame, text="⬅ Menú", font=self.font_btn, 
@@ -172,22 +180,16 @@ class MathDragGameLevel4:
             self.dibujar_pelotas_en_columna(i, cantidad)
 
         # 6. Generar Fichas de Números (Opciones)
-        # Incluimos las respuestas correctas + distractores
         opciones = self.target_values.copy()
         while len(opciones) < 6: 
             n = random.randint(1, 9)
             opciones.append(n)
         
-        # Barajar para que no estén en orden
         random.shuffle(opciones)
 
-        # 7. Posicionar Fichas abajo
-        frame_w = self.ancho_real_frame
-        y_pos = self.content_frame.winfo_height() - int(160 * self.scale)
-        # Corrección si la ventana aún no se dibujó
-        if y_pos < 0: y_pos = int(self.master.winfo_screenheight() * 0.90) - int(180 * self.scale)
-        
-        zona_width = int(frame_w / 6)
+        # 7. Posicionar Fichas abajo (Relativo al alto del frame)
+        y_pos = self.alto_real_frame - int(140 * self.scale)
+        zona_width = self.ancho_real_frame // 6
         
         for i, val in enumerate(opciones):
             img_num = self.crear_imagen_numero(val)
@@ -235,7 +237,6 @@ class MathDragGameLevel4:
         if widget.bloqueado: return
         widget.lift()
         self.drag_data["item"] = widget
-        # Guardar offset para que no "salte" al hacer clic
         self.drag_data["offset_x"] = event.x
         self.drag_data["offset_y"] = event.y
 
@@ -243,10 +244,9 @@ class MathDragGameLevel4:
         widget = self.drag_data["item"]
         if not widget: return
         
-        # Cálculo preciso usando coordenadas globales
+        # Coordenadas globales a relativas del frame
         x_root = event.x_root
         y_root = event.y_root
-        
         frame_x = self.content_frame.winfo_rootx()
         frame_y = self.content_frame.winfo_rooty()
         
@@ -260,7 +260,6 @@ class MathDragGameLevel4:
         self.drag_data["item"] = None
         if not widget: return
 
-        # Centro de la ficha soltada
         drop_x = widget.winfo_rootx() + (widget.winfo_width() // 2)
         drop_y = widget.winfo_rooty() + (widget.winfo_height() // 2)
 
@@ -268,22 +267,19 @@ class MathDragGameLevel4:
         
         # Verificar si cayó en alguno de los 4 slots
         for i, target in enumerate(self.target_widgets):
-            if self.slots_filled[i]: continue # Si ya está lleno, saltar
+            if self.slots_filled[i]: continue 
             
             tx = target.winfo_rootx()
             ty = target.winfo_rooty()
             tw = target.winfo_width()
             th = target.winfo_height()
             
-            # Colisión
             if tx < drop_x < tx + tw and ty < drop_y < ty + th:
-                # Validar si es el número correcto para esa columna
                 if widget.valor == self.target_values[i]:
-                    # Posicionar exacto
+                    # Posicionar relativo al frame
                     final_x = tx - self.content_frame.winfo_rootx()
                     final_y = ty - self.content_frame.winfo_rooty()
                     
-                    # Centrar
                     ox = (tw - widget.winfo_width()) // 2
                     oy = (th - widget.winfo_height()) // 2
                     
@@ -292,13 +288,11 @@ class MathDragGameLevel4:
                     self.slots_filled[i] = True
                     encontrado = True
                     
-                    # Verificar victoria
                     if all(self.slots_filled):
                         self.master.after(300, self.game_win)
                     break
         
         if not encontrado:
-            # Volver a posición original
             widget.place(x=widget.home_x, y=widget.home_y)
 
     def game_win(self):
@@ -345,7 +339,6 @@ class MathDragGameLevel4:
         s = self.box_size
         img = Image.new("RGB", (s, s), "white") 
         draw = ImageDraw.Draw(img)
-        # Borde punteado simulado o gris
         draw.rectangle([0, 0, s-1, s-1], outline="#BDBDBD", width=2)
         try:
             f = ImageFont.truetype("arial.ttf", int(s*0.4))
@@ -358,9 +351,9 @@ class MathDragGameLevel4:
         img = Image.new("RGBA", (s, s), (255, 255, 255, 0))
         draw = ImageDraw.Draw(img)
         
-        # Búsqueda de archivos
+        # Búsqueda de archivos (Busca en nivel 3 que es donde suelen estar las pelotas)
         item_img = None
-        posibles = [tipo, os.path.join("..", "nivel3", tipo)] # Busca en nivel 3 las pelotas
+        posibles = [tipo, os.path.join("..", "nivel3", tipo), os.path.join("assets", tipo)]
         
         for p in posibles:
             full_p = os.path.join(SCRIPT_DIR, p)
@@ -374,11 +367,11 @@ class MathDragGameLevel4:
             img_res = item_img.resize((s, s), Image.Resampling.LANCZOS)
             return ImageTk.PhotoImage(img_res)
         else:
-            # Fallback Dibujos
+            # Fallback Dibujos (Si no encuentra la imagen)
             draw.ellipse([2, 2, s-2, s-2], outline="black", width=2)
             if "futbol" in tipo:
                 draw.ellipse([2, 2, s-2, s-2], fill="white", outline="black")
-                draw.ellipse([s*0.4, s*0.4, s*0.6, s*0.6], fill="black") # Simple spot
+                draw.ellipse([s*0.4, s*0.4, s*0.6, s*0.6], fill="black") 
             elif "basquet" in tipo:
                 draw.ellipse([2, 2, s-2, s-2], fill="#FF9800", outline="black")
                 draw.line([s/2, 2, s/2, s-2], fill="black", width=2)
@@ -386,7 +379,6 @@ class MathDragGameLevel4:
                 draw.ellipse([2, 2, s-2, s-2], fill="#CCFF00", outline="black")
                 draw.arc([s*0.2, -s*0.2, s*1.2, s*0.8], 140, 240, fill="white", width=2)
             elif "voley" in tipo:
-                # Voley Amarillo y Azul
                 draw.ellipse([2, 2, s-2, s-2], fill="#FFEB3B", outline="black")
                 draw.chord([2, 2, s-2, s-2], 120, 240, fill="#0055A4", outline="black")
                 draw.chord([2, 2, s-2, s-2], 300, 60, fill="#0055A4", outline="black")

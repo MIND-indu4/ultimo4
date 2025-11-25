@@ -33,25 +33,25 @@ class Config:
     TEXT_COLOR = "#5D4037"     
     BTN_BACK_BG = "#FFF59D"
     
-    ICON_SIZE = 140            
+    # --- CAMBIOS PARA LA PANTALLA DE RASPBERRY PI ---
+    ICON_SIZE = 150            # Iconos un poco más grandes
     MINI_ICON_SIZE = 80        
-    GRID_COLS = 5              
+    GRID_COLS = 4              # 4 Columnas se ven mejor centradas en pantallas cuadradas/4:3
     
-    CARPETA_IMG = "." 
+    # CARPETAS DE RECURSOS
+    CARPETA_BASE_IMG = "."      
     CARPETA_AUDIO = "audio_cache" 
+    NOMBRE_CARPETA_EMOJIS = "emojis" 
 
 class TEAyudoApp:
     def __init__(self, root):
         self.root = root
         self.root.title("TEAyudo - Comunicador Completo")
         
-        # --- PANTALLA COMPLETA / MAXIMIZADA ---
-        if SYSTEM_OS == "Windows":
-            self.root.state("zoomed")
-        else:
-            self.root.attributes("-fullscreen", True)
-            # Escape para salir de pantalla completa
-            self.root.bind("<Escape>", lambda e: self.root.attributes("-fullscreen", False))
+        # --- PANTALLA COMPLETA ---
+        self.root.attributes("-fullscreen", True)
+        # Salir con ESC por si acaso
+        self.root.bind("<Escape>", lambda e: self.root.attributes("-fullscreen", False))
 
         self.root.configure(bg=Config.BG_COLOR)
 
@@ -72,41 +72,48 @@ class TEAyudoApp:
         self.DATA = {
             "root": [
                 # FILA 1
-                {"tipo": "folder", "label": "Social",    "id": "social",    "color": "#FFCCBC", "emoji": "👋"},
-                {"tipo": "folder", "label": "Preguntas", "id": "preguntas", "color": "#B2EBF2", "emoji": "❓"},
-                {"tipo": "folder", "label": "Emociones", "id": "emociones", "color": "#F48FB1", "emoji": "🙂"},
-                {"tipo": "folder", "label": "Acciones",  "id": "acciones",  "color": "#AED581", "emoji": "🏃"},
-                {"tipo": "item",   "label": "Yo",        "text": "Yo quiero", "color": "#E1BEE7", "emoji": "🙋"},
+                {"tipo": "folder", "label": "Social",    "id": "social",    "color": "#FFCCBC", "emoji": "👋", "img": "social.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Preguntas", "id": "preguntas", "color": "#B2EBF2", "emoji": "❓", "img": "preguntas.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Emociones", "id": "emociones", "color": "#F48FB1", "emoji": "🙂", "img": "emociones.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Acciones",  "id": "acciones",  "color": "#AED581", "emoji": "🏃", "img": "acciones.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                
                 # FILA 2
-                {"tipo": "folder", "label": "Comida",    "id": "comida",    "color": Config.FOLDER_COLOR, "emoji": "🍽️"},
-                {"tipo": "folder", "label": "Bebida",    "id": "bebida",    "color": "#81D4FA", "emoji": "🥤"},
-                {"tipo": "folder", "label": "Higiene",   "id": "higiene",   "color": "#80DEEA", "emoji": "🧼"},
-                {"tipo": "folder", "label": "Ropa",      "id": "ropa",      "color": "#CE93D8", "emoji": "👕"},
-                {"tipo": "folder", "label": "Salud",     "id": "salud",     "color": "#EF9A9A", "emoji": "🏥"},
+                {"tipo": "item",   "label": "Yo",        "text": "Yo quiero", "color": "#E1BEE7", "emoji": "🙋", "img": "yo.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Comida",    "id": "comida",    "color": Config.FOLDER_COLOR, "emoji": "🍽️", "img": "comida.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Bebida",    "id": "bebida",    "color": "#81D4FA", "emoji": "🥤", "img": "bebida.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Higiene",   "id": "higiene",   "color": "#80DEEA", "emoji": "🧼", "img": "higiene.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                
                 # FILA 3
-                {"tipo": "folder", "label": "Lugares",   "id": "lugares",   "color": "#BCAAA4", "emoji": "🏠"},
-                {"tipo": "folder", "label": "Escuela",   "id": "escuela",   "color": "#FFF59D", "emoji": "🏫"},
-                {"tipo": "folder", "label": "Cocina",    "id": "cocina",    "color": "#B0BEC5", "emoji": "🍴"},
-                {"tipo": "folder", "label": "Tecnología","id": "tecnologia","color": "#90CAF9", "emoji": "📱"},
-                {"tipo": "folder", "label": "Transporte","id": "transporte","color": "#CFD8DC", "emoji": "🚗"},
+                {"tipo": "folder", "label": "Ropa",      "id": "ropa",      "color": "#CE93D8", "emoji": "👕", "img": "ropa.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Salud",     "id": "salud",     "color": "#EF9A9A", "emoji": "🏥", "img": "salud.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Lugares",   "id": "lugares",   "color": "#BCAAA4", "emoji": "🏠", "img": "lugares.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Escuela",   "id": "escuela",   "color": "#FFF59D", "emoji": "🏫", "img": "escuela.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                
                 # FILA 4
-                {"tipo": "folder", "label": "Personas",  "id": "personas",  "color": "#FFAB91", "emoji": "👥"},
-                {"tipo": "folder", "label": "Cuerpo",    "id": "cuerpo",    "color": "#FFCCBC", "emoji": "👃"},
-                {"tipo": "folder", "label": "Animales",  "id": "animales",  "color": "#D7CCC8", "emoji": "🐾"},
-                {"tipo": "folder", "label": "Tiempo",    "id": "tiempo",    "color": "#9FA8DA", "emoji": "⏰"},
-                {"tipo": "folder", "label": "Juguetes",  "id": "juguetes",  "color": "#F48FB1", "emoji": "🧸"},
+                {"tipo": "folder", "label": "Cocina",    "id": "cocina",    "color": "#B0BEC5", "emoji": "🍴", "img": "cocina.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Tecnología","id": "tecnologia","color": "#90CAF9", "emoji": "📱", "img": "tecnologia.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Transporte","id": "transporte","color": "#CFD8DC", "emoji": "🚗", "img": "transporte.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Personas",  "id": "personas",  "color": "#FFAB91", "emoji": "👥", "img": "personas.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                
                 # FILA 5
-                {"tipo": "folder", "label": "Deportes",  "id": "deportes",  "color": "#C5E1A5", "emoji": "⚽"},
-                {"tipo": "folder", "label": "Colores",   "id": "colores",   "color": "#FFFFFF", "emoji": "🎨"},
-                {"tipo": "folder", "label": "Describir", "id": "descriptivos", "color": "#E0E0E0", "emoji": "📏"},
-                {"tipo": "folder", "label": "Formas",    "id": "formas",    "color": "#EEEEEE", "emoji": "🔺"},
+                {"tipo": "folder", "label": "Cuerpo",    "id": "cuerpo",    "color": "#FFCCBC", "emoji": "👃", "img": "cuerpo.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Animales",  "id": "animales",  "color": "#D7CCC8", "emoji": "🐾", "img": "animales.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Tiempo",    "id": "tiempo",    "color": "#9FA8DA", "emoji": "⏰", "img": "tiempo.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Juguetes",  "id": "juguetes",  "color": "#F48FB1", "emoji": "🧸", "img": "juguetes.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                
                 # FILA 6
-                {"tipo": "item", "label": "Sí", "text": "Sí", "color": "#C8E6C9", "emoji": "👍"},
-                {"tipo": "item", "label": "No", "text": "No", "color": "#FFCDD2", "emoji": "👎"},
-                {"tipo": "item", "label": "Ayuda", "text": "Ayuda por favor", "color": "#FFF176", "emoji": "🆘"},
+                {"tipo": "folder", "label": "Deportes",  "id": "deportes",  "color": "#C5E1A5", "emoji": "⚽", "img": "deportes.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Colores",   "id": "colores",   "color": "#FFFFFF", "emoji": "🎨", "img": "colores.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Describir", "id": "descriptivos", "color": "#E0E0E0", "emoji": "📏", "img": "descriptivos.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Formas",    "id": "formas",    "color": "#EEEEEE", "emoji": "🔺", "img": "formas.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                
+                # FILA 7
+                {"tipo": "item", "label": "Sí", "text": "Sí", "color": "#C8E6C9", "emoji": "👍", "img": "si.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "item", "label": "No", "text": "No", "color": "#FFCDD2", "emoji": "👎", "img": "no.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "item", "label": "Ayuda", "text": "Ayuda por favor", "color": "#FFF176", "emoji": "🆘", "img": "sos.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
                 {"tipo": "item", "label": "Baño", "text": "Quiero ir al baño", "img": "baño.png", "ruta": "acciones"},
             ],
-            # --- CATEGORÍAS ---
+            # --- CATEGORÍAS (RESTO IGUAL) ---
             "social": [
                 {"tipo": "item", "label": "Hola", "img": "hola.png", "ruta": "social"},
                 {"tipo": "item", "label": "Adiós", "img": "adios.png", "ruta": "social"},
@@ -165,8 +172,8 @@ class TEAyudoApp:
                 {"tipo": "item", "label": "Perder", "img": "perder.png", "ruta": "deportes"},
             ],
             "comida": [
-                {"tipo": "folder", "label": "Frutas", "id": "frutas", "color": "#FFE0B2"},
-                {"tipo": "folder", "label": "Verduras", "id": "verduras", "color": "#C5E1A5"},
+                {"tipo": "folder", "label": "Frutas", "id": "frutas", "color": "#FFE0B2", "img": "frutas.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Verduras", "id": "verduras", "color": "#C5E1A5", "img": "verduras.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
                 {"tipo": "item", "label": "Pan", "img": "pan.png", "ruta": "comida"},
                 {"tipo": "item", "label": "Galleta", "img": "galleta.png", "ruta": "comida"},
                 {"tipo": "item", "label": "Sopa", "img": "sopa.png", "ruta": "comida"},
@@ -249,7 +256,7 @@ class TEAyudoApp:
                 {"tipo": "item", "label": "Súper", "img": "supermercado.png", "ruta": "lugares"},
             ],
             "escuela": [
-                {"tipo": "folder", "label": "Materias", "id": "materias", "color": "#FFF59D"},
+                {"tipo": "folder", "label": "Materias", "id": "materias", "color": "#FFF59D", "img": "materias.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
                 {"tipo": "item", "label": "Lápiz", "img": "lapiz.png", "ruta": "escuela"},
                 {"tipo": "item", "label": "Papel", "img": "papel.png", "ruta": "escuela"},
                 {"tipo": "item", "label": "Libro", "img": "libro.png", "ruta": "escuela"},
@@ -266,11 +273,11 @@ class TEAyudoApp:
                 {"tipo": "item", "label": "Arte", "img": "arte.png", "ruta": "escuela/materias"},
             ],
             "animales": [
-                {"tipo": "folder", "label": "Mascotas", "id": "mascotas", "color": "#D7CCC8"},
-                {"tipo": "folder", "label": "Granja", "id": "granja", "color": "#D7CCC8"},
-                {"tipo": "folder", "label": "Selva", "id": "selva", "color": "#D7CCC8"},
-                {"tipo": "folder", "label": "Mar", "id": "mar", "color": "#D7CCC8"},
-                {"tipo": "folder", "label": "Insectos", "id": "insectos", "color": "#D7CCC8"},
+                {"tipo": "folder", "label": "Mascotas", "id": "mascotas", "color": "#D7CCC8", "img": "mascotas.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Granja", "id": "granja", "color": "#D7CCC8", "img": "granja.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Selva", "id": "selva", "color": "#D7CCC8", "img": "selva.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Mar", "id": "mar", "color": "#D7CCC8", "img": "mar.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Insectos", "id": "insectos", "color": "#D7CCC8", "img": "insectos.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
             ],
             "mascotas": [
                 {"tipo": "item", "label": "Perro", "img": "perro.png", "ruta": "animales/mascotas"},
@@ -305,8 +312,8 @@ class TEAyudoApp:
                 {"tipo": "item", "label": "Araña", "img": "araña.png", "ruta": "animales/insectos"},
             ],
             "tiempo": [
-                {"tipo": "folder", "label": "Clima", "id": "clima", "color": "#90CAF9"},
-                {"tipo": "folder", "label": "Días", "id": "dias", "color": "#9FA8DA"},
+                {"tipo": "folder", "label": "Clima", "id": "clima", "color": "#90CAF9", "img": "clima.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
+                {"tipo": "folder", "label": "Días", "id": "dias", "color": "#9FA8DA", "img": "dias.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
                 {"tipo": "item", "label": "Hoy", "img": "hoy.png", "ruta": "tiempo"},
                 {"tipo": "item", "label": "Mañana", "img": "mañana.png", "ruta": "tiempo"},
                 {"tipo": "item", "label": "Ayer", "img": "ayer.png", "ruta": "tiempo"},
@@ -349,7 +356,7 @@ class TEAyudoApp:
                 {"tipo": "item", "label": "Blanco", "img": "blanco.png", "ruta": "colores"},
             ],
             "personas": [
-                {"tipo": "folder", "label": "Profesiones", "id": "profesiones", "color": "#FFAB91"},
+                {"tipo": "folder", "label": "Profesiones", "id": "profesiones", "color": "#FFAB91", "img": "profesiones.png", "ruta": Config.NOMBRE_CARPETA_EMOJIS},
                 {"tipo": "item", "label": "Mamá", "img": "mama.png", "ruta": "personas"},
                 {"tipo": "item", "label": "Papá", "img": "papá.png", "ruta": "personas"},
                 {"tipo": "item", "label": "Bebé", "img": "bebe.png", "ruta": "personas"},
@@ -446,7 +453,7 @@ class TEAyudoApp:
                                  bg=Config.HEADER_BG, fg=Config.TEXT_COLOR)
         self.lbl_path.pack(side="left", padx=20)
 
-        # --- NUEVO: BOTÓN SALIR AL MENÚ PRINCIPAL (Derecha) ---
+        # --- BOTÓN SALIR AL MENÚ PRINCIPAL (Derecha) ---
         self.right_nav = tk.Frame(self.nav_frame, bg=Config.HEADER_BG)
         self.right_nav.pack(side="right", padx=10)
 
@@ -491,8 +498,9 @@ class TEAyudoApp:
         self.canvas.pack(side="left", fill="both", expand=True)
         
         self.scrollbar.config(command=self.canvas.yview)
+        # --- CAMBIO IMPORTANTE: anchor="nw" para asegurar que se estire desde la esquina ---
         self.container = tk.Frame(self.canvas, bg=Config.BG_COLOR)
-        self.canvas_window = self.canvas.create_window((0,0), window=self.container, anchor="n")
+        self.canvas_window = self.canvas.create_window((0,0), window=self.container, anchor="nw")
 
         self.container.bind("<Configure>", self.on_frame_configure)
         self.canvas.bind("<Configure>", self.on_canvas_configure)
@@ -535,6 +543,8 @@ class TEAyudoApp:
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
     def on_canvas_configure(self, event):
+        # --- ESTE ES EL TRUCO PARA CENTRAR ---
+        # Fuerza que el ancho de la ventana interna sea igual al del canvas visible
         self.canvas.itemconfig(self.canvas_window, width=event.width)
 
     def _on_mousewheel(self, event):
@@ -560,13 +570,15 @@ class TEAyudoApp:
         titulo = "INICIO" if folder_id == "root" else folder_id.upper()
         self.lbl_path.config(text=titulo)
 
+        # CONFIGURAR COLUMNAS PARA QUE SE ESTIREN (weight=1)
         for i in range(Config.GRID_COLS):
             self.container.columnconfigure(i, weight=1)
 
         row, col = 0, 0
         for item in items:
             frame_btn = tk.Frame(self.container, bg=Config.BG_COLOR)
-            frame_btn.grid(row=row, column=col, padx=10, pady=15, sticky="n")
+            # padx=20 y pady=20 para dar más aire
+            frame_btn.grid(row=row, column=col, padx=20, pady=20, sticky="n")
             
             img_name = item.get("img", None)
             ruta_rel = item.get("ruta", "")
@@ -698,7 +710,8 @@ class TEAyudoApp:
         img_cargada = False
         if nombre_archivo:
             parts = ruta_relativa.split("/") if "/" in ruta_relativa else [ruta_relativa]
-            ruta_completa = os.path.join(SCRIPT_DIR, Config.CARPETA_IMG, *parts, nombre_archivo)
+            # Usa CARPETA_BASE_IMG (.) como base y luego concatena 'emojis' o 'comida/frutas' etc
+            ruta_completa = os.path.join(SCRIPT_DIR, Config.CARPETA_BASE_IMG, *parts, nombre_archivo)
             
             if os.path.exists(ruta_completa):
                 try:
@@ -725,7 +738,6 @@ class TEAyudoApp:
                 if SYSTEM_OS == "Windows":
                     font = ImageFont.truetype("seguiemj.ttf", font_size)
                 else:
-                    # Intentar fuentes comunes de Linux que tengan símbolos
                     try:
                         font = ImageFont.truetype("DejaVuSans.ttf", font_size)
                     except:

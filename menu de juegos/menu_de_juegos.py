@@ -1,9 +1,9 @@
 import tkinter as tk
-from tkinter import messagebox, Frame, Button, Label
+from tkinter import messagebox, Frame, Button, Label, Toplevel, Canvas
 import subprocess
 import sys
 import os
-import platform  # 🔥 FIX: Necesario para detectar OS
+import platform
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 
 # ========== DETECCIÓN DE SISTEMA ==========
@@ -11,9 +11,6 @@ ES_WINDOWS = platform.system() == "Windows"
 
 # ========== RUTAS (Optimizada) ==========
 def get_project_root():
-    # 🔥 FIX: Método más seguro que no depende del nombre "MIND"
-    # Busca la carpeta donde está este script y asume que es la raíz
-    # o sube un nivel si estás dentro de una subcarpeta 'menu'.
     script_path = os.path.abspath(__file__)
     script_dir = os.path.dirname(script_path)
     
@@ -33,11 +30,9 @@ def get_safe_path(*path_parts):
 
 # ========== FUENTE (Font) COMPATIBLE ==========
 def get_font_name():
-    # 🔥 FIX: Arial solo en Windows. En Linux usamos DejaVu o Liberation
     if ES_WINDOWS:
         return "arial.ttf"
     else:
-        # DejaVuSans suele venir preinstalada en Raspberry Pi OS
         return "DejaVuSans.ttf" 
 
 FONT_NAME = get_font_name()
@@ -64,7 +59,7 @@ class GameMenu:
         self.screen_width = master.winfo_screenwidth()
         self.screen_height = master.winfo_screenheight()
         
-        # 🔥 FIX: Ajuste de escala para Raspberry Pi (que a veces tiene resoluciones raras)
+        # Ajuste de escala
         self.base_width = 1000
         self.base_height = 800
         self.scale = min(self.screen_width / self.base_width, self.screen_height / self.base_height)
@@ -124,11 +119,8 @@ class GameMenu:
                 img = Image.new('RGBA', (size, size), (255, 255, 255, 0)) 
                 draw = ImageDraw.Draw(img)
                 try:
-                    # 🔥 FIX: Usamos la variable FONT_NAME definida arriba
                     font = ImageFont.truetype(FONT_NAME, int(size * 0.7) if icon_type == "corner" else int(size * 0.6))
                 except IOError:
-                    # Si falla, carga la por defecto del sistema
-                    print(f"Fuente {FONT_NAME} no encontrada, usando default.")
                     font = ImageFont.load_default()
                 
                 if icon_type == "game":
@@ -146,8 +138,6 @@ class GameMenu:
                 img.save(full_path)
 
     def load_icons(self):
-        # ... (Código igual, omitido para brevedad) ...
-        # La lógica aquí estaba bien
         scaled_game_size = int(140 * self.scale)
         scaled_small_size = int(40 * self.scale)
         for name, filename in self.icon_paths.items():
@@ -164,7 +154,6 @@ class GameMenu:
                 self.icons[name] = None
 
     def create_widgets(self):
-        # ... (Sin cambios necesarios, tu lógica de Tkinter es correcta) ...
         margin = int(40 * self.scale)
         self.main_canvas = tk.Canvas(self.master, bg=self.yellow_bg, highlightthickness=0, bd=0)
         self.main_canvas.place(x=margin, y=margin, width=self.screen_width - 2*margin, height=self.screen_height - 2*margin)
@@ -178,8 +167,6 @@ class GameMenu:
                                                   fill=self.white_frame_bg, outline="", width=0)
 
         title_font_size = int(28 * self.scale)
-        # Nota: Tkinter usa fuentes por nombre de sistema, Arial suele funcionar en Linux si está instalada,
-        # si no Tkinter usa una alternativa automáticamente, así que esto está "ok".
         title_label = tk.Label(self.main_canvas, text="Seleccione una actividad",
                                font=("Arial", title_font_size, "bold"),
                                fg=self.text_color, bg=self.white_frame_bg)
@@ -209,7 +196,6 @@ class GameMenu:
         self.position_corner_buttons()
 
     def create_game_button(self, parent, text, icon_image, command, border_color, row, col, dimensions, pad):
-        # ... (Código sin cambios, funciona bien) ...
         frame_wrapper = tk.Frame(parent, bg=self.white_frame_bg)
         frame_wrapper.grid(row=row, column=col, padx=pad, pady=pad)
 
@@ -248,7 +234,7 @@ class GameMenu:
         text_label.bind("<Button-1>", lambda e: command())
         button_canvas.bind("<Button-1>", lambda e: command())
 
-    # ... (Métodos de menú lateral omitidos, funcionan bien) ...
+    # ========== MENÚ LATERAL ==========
     def create_side_menu(self):
         self.side_menu_frame = Frame(self.master, bg=self.menu_bg, relief="flat")
         menu_title = Label(self.side_menu_frame, text="MENÚ", 
@@ -330,21 +316,17 @@ class GameMenu:
             x_pos = window_width - btn_width - button_padding
             self.close_btn.place(x=x_pos, y=button_padding)
 
-    # ========== LÓGICA DE NAVEGACIÓN CORREGIDA ==========
+    # ========== LÓGICA DE JUEGOS ==========
     def run_game1(self):
-        # QUITÉ 'menu de juegos' del principio
         self._open_and_close('simon dice', 'menu', 'menu_simondice.py') 
 
     def run_game2(self):
-        # QUITÉ 'menu de juegos' del principio
         self._open_and_close('rompecabezas', 'menu', 'menu_rompecabezas.py')
 
     def run_game3(self):
-        # QUITÉ 'menu de juegos' del principio
         self._open_and_close('matematicas', 'menu', 'menumatematicas.py')
 
     def run_game4(self):
-        # QUITÉ 'menu de juegos' del principio
         self._open_and_close('pictogramas', 'TEAyudo.py')  
 
     def _open_and_close(self, *path_segments_to_script):
@@ -364,21 +346,17 @@ class GameMenu:
             
             cmd = [sys.executable, "-u", script_path]
             
-            # 🔥 FIX CRÍTICO: 'creationflags' SOLO existe en Windows.
-            # En Linux, subprocess.Popen NO tiene ese argumento y da error si se pasa 0.
             kwargs = {}
             if ES_WINDOWS:
                 kwargs['creationflags'] = subprocess.DETACHED_PROCESS
             
             subprocess.Popen(cmd, cwd=script_dir, **kwargs)
-            
             sys.exit(0)
             
         except Exception as e:
-            # Usamos print también por si la ventana ya se cerró
             print(f"Error al abrir juego: {e}")
-            # messagebox.showerror("Error Fatal", f"Error al abrir juego:\n{e}")
 
+    # ========== OPCIONES DE MENÚ ==========
     def show_stats(self):
         messagebox.showinfo("Estadísticas", "Próximamente: Estadísticas de juego")
         self.close_side_menu()
@@ -387,9 +365,84 @@ class GameMenu:
         messagebox.showinfo("Ajustes", "Próximamente: Panel de configuración")
         self.close_side_menu()
 
+    # --- NUEVA LÓGICA DE ACERCA DE ---
     def show_about(self):
-        messagebox.showinfo("Acerca de", "MIND - Sistema de Terapia Cognitiva\nVersión 1.0")
-        self.close_side_menu()
+        self.close_side_menu() 
+
+        ventana_acerca = Toplevel(self.master)
+        ventana_acerca.title("Acerca de Nosotros")
+        ventana_acerca.attributes('-fullscreen', True)
+        ventana_acerca.configure(bg="white")
+
+        canvas_main = Canvas(ventana_acerca, bg="white", highlightthickness=0)
+        canvas_main.pack(fill="both", expand=True)
+
+        ruta_imagen = os.path.join(self.main_project_root, "nosotros.png")
+        
+        if os.path.exists(ruta_imagen):
+            try:
+                imagen_original = Image.open(ruta_imagen)
+                
+                ancho_pantalla = self.master.winfo_screenwidth()
+                alto_pantalla = self.master.winfo_screenheight()
+
+                ratio = min(ancho_pantalla / imagen_original.width, alto_pantalla / imagen_original.height)
+                nuevo_ancho = int(imagen_original.width * ratio)
+                nuevo_alto = int(imagen_original.height * ratio)
+
+                pos_x = (ancho_pantalla - nuevo_ancho) // 2
+                pos_y = (alto_pantalla - nuevo_alto) // 2
+
+                imagen_redimensionada = imagen_original.resize((nuevo_ancho, nuevo_alto), Image.Resampling.LANCZOS)
+                imagen_tk = ImageTk.PhotoImage(imagen_redimensionada)
+
+                canvas_main.create_image(pos_x, pos_y, anchor="nw", image=imagen_tk)
+                canvas_main.image = imagen_tk 
+            except Exception as e:
+                print(f"Error cargando imagen nosotros: {e}")
+                canvas_main.create_text(self.screen_width//2, self.screen_height//2, text="Error al cargar imagen")
+        else:
+            canvas_main.create_text(self.screen_width//2, self.screen_height//2, 
+                                    text="No se encontró 'nosotros.png'", font=("Arial", 20))
+
+        self._dibujar_boton_volver(canvas_main, ventana_acerca)
+
+        ventana_acerca.bind("<Escape>", lambda event: ventana_acerca.destroy())
+
+    def _dibujar_boton_volver(self, canvas, ventana):
+        ancho_btn = 140
+        alto_btn = 45
+        radio = 20
+        # Posición: Esquina superior derecha con margen
+        x = self.screen_width - ancho_btn - 30 
+        y = 30
+        color_normal = "#FF5733" # Naranja
+        color_hover = "#C70039"  # Rojo oscuro
+        
+        x1, y1 = x, y
+        x2, y2 = x + ancho_btn, y + alto_btn
+        points = [x1+radio, y1, x1+radio, y1, x2-radio, y1, x2-radio, y1, x2, y1, x2, y1+radio, x2, y1+radio, 
+                  x2, y2-radio, x2, y2-radio, x2, y2, x2-radio, y2, x2-radio, y2, x1+radio, y2, x1+radio, y2, 
+                  x1, y2, x1, y2-radio, x1, y2-radio, x1, y1+radio, x1, y1+radio, x1, y1]
+
+        btn_bg = canvas.create_polygon(points, fill=color_normal, smooth=True, tags="btn_volver")
+        canvas.create_text(x + ancho_btn/2, y + alto_btn/2, text="⬅ Volver", fill="white", 
+                           font=("Arial", 12, "bold"), tags="btn_volver")
+
+        def al_entrar(e):
+            canvas.itemconfig(btn_bg, fill=color_hover)
+            canvas.config(cursor="hand2")
+
+        def al_salir(e):
+            canvas.itemconfig(btn_bg, fill=color_normal)
+            canvas.config(cursor="")
+
+        def al_clic(e):
+            ventana.destroy()
+
+        canvas.tag_bind("btn_volver", "<Enter>", al_entrar)
+        canvas.tag_bind("btn_volver", "<Leave>", al_salir)
+        canvas.tag_bind("btn_volver", "<Button-1>", al_clic)
 
     def show_clock(self):
         self._open_and_close('reloj_semaforo.py')
