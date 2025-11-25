@@ -38,7 +38,7 @@ class MathDragGameLevel4:
         self.master = master
         master.title("Matemáticas - Nivel 4")
         
-        # --- CONFIGURACIÓN PANTALLA ---
+        # --- CONFIGURACIÓN PANTALLA (FIX RASPBERRY) ---
         master.update_idletasks() 
         
         if SYSTEM_OS == "Windows":
@@ -358,21 +358,28 @@ class MathDragGameLevel4:
         btn_next.bind("<Leave>", on_leave_green)
     # =============================================================
 
-    # --- GENERADORES GRÁFICOS ---
+    # --- GENERADORES GRÁFICOS (FONT FIX) ---
     def crear_imagen_numero(self, numero):
         s = self.box_size
         img = Image.new("RGB", (s, s), "white")
         draw = ImageDraw.Draw(img)
         draw.rectangle([0, 0, s-1, s-1], outline=GameConfig.MAIN_COLOR, width=3)
         
-        try: font = ImageFont.truetype("arial.ttf", int(s*0.6))
-        except: font = ImageFont.load_default()
+        font_name = "arial.ttf" if SYSTEM_OS == "Windows" else "DejaVuSans.ttf"
+        try: 
+            # TAMAÑO AUMENTADO A 0.85
+            font = ImageFont.truetype(font_name, int(s*0.85))
+        except: 
+            # Fallback a cualquier fuente TrueType que encuentre si falla DejaVu
+            try: font = ImageFont.truetype("FreeSans.ttf", int(s*0.85))
+            except: font = ImageFont.load_default()
 
         text = str(numero)
         try:
             bbox = draw.textbbox((0, 0), text, font=font)
             w, h = bbox[2]-bbox[0], bbox[3]-bbox[1]
-            draw.text(((s-w)/2, (s-h)/2 - 5), text, fill=GameConfig.MAIN_COLOR, font=font)
+            # Ajuste de centrado
+            draw.text(((s-w)/2, (s-h)/2 - (s*0.1)), text, fill=GameConfig.MAIN_COLOR, font=font)
         except:
             draw.text((s//3, s//4), text, fill=GameConfig.MAIN_COLOR)
 
@@ -384,8 +391,13 @@ class MathDragGameLevel4:
         draw = ImageDraw.Draw(img)
         draw.rectangle([0, 0, s-1, s-1], outline="#BDBDBD", width=2)
         try:
-            f = ImageFont.truetype("arial.ttf", int(s*0.4))
-            draw.text((s//3, s//4), "?", fill="#E0E0E0", font=f)
+            f_name = "arial.ttf" if SYSTEM_OS == "Windows" else "DejaVuSans.ttf"
+            f = ImageFont.truetype(f_name, int(s*0.5))
+            
+            text = "?"
+            bbox = draw.textbbox((0, 0), text, font=f)
+            w, h = bbox[2]-bbox[0], bbox[3]-bbox[1]
+            draw.text(((s-w)/2, (s-h)/2 - (s*0.1)), text, fill="#E0E0E0", font=f)
         except: pass
         return ImageTk.PhotoImage(img)
 
@@ -395,7 +407,6 @@ class MathDragGameLevel4:
         draw = ImageDraw.Draw(img)
         
         item_img = None
-        # Busca imágenes en carpetas cercanas (nivel 3 suele tener las pelotas)
         rutas = [tipo, os.path.join("..", "nivel3", tipo), os.path.join("assets", tipo)]
         
         for p in rutas:
@@ -410,7 +421,6 @@ class MathDragGameLevel4:
             img_res = item_img.resize((s, s), Image.Resampling.LANCZOS)
             return ImageTk.PhotoImage(img_res)
         else:
-            # Fallback
             draw.ellipse([2, 2, s-2, s-2], outline="black", width=2)
             if "futbol" in tipo:
                 draw.ellipse([2, 2, s-2, s-2], fill="white", outline="black")
