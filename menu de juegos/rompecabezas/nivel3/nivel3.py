@@ -14,18 +14,17 @@ def get_system_font():
     if platform.system() == "Windows":
         return "Segoe UI"
     else:
-        return "DejaVu Sans" # Estándar en Raspberry Pi OS
+        return "DejaVu Sans" 
 
 SYSTEM_FONT = get_system_font()
 
-# ---------- Configuración del Juego ----------
+# ---------- Configuración del Juego (NIVEL 3) ----------
 class GameConfig:
     PIECE_SIZE = 80 
     ROWS = 4 
     COLS = 4 
 
-    # ¡ATENCIÓN EN LINUX!
-    # Revisa que los archivos se llamen EXACTAMENTE así (ej: "hospital.png" y no "Hospital.png")
+    # Imágenes del Nivel 3
     IMAGE_FILENAMES = [
         "esperar sentado.png", "hospital.png", "escribir en el pizarron.png", 
         "invierno.png", "leer en voz alta.png", "librería.png", 
@@ -36,6 +35,7 @@ class GameConfig:
     CURRENT_IMAGE_FILENAME = ""
     CURRENT_IMAGE_NAME = ""
 
+    # Paleta de Colores (Lila)
     BG_COLOR_MAIN = "#c59fd7"
     BG_COLOR_CARD = "#ffffff"
     HEADER_TEXT_COLOR = "#2c3e50"
@@ -105,14 +105,10 @@ class PuzzleGame:
         GameConfig.SIDE_PIECE_PADDING_X = int(10 * scale)
         GameConfig.SIDE_PIECE_SPACING_Y = int(5 * scale)
 
-        # Escalar fuentes (Usando SYSTEM_FONT)
+        # Escalar fuentes
         self.font_title = (SYSTEM_FONT, int(24 * scale), "bold")
         self.font_name = (SYSTEM_FONT, int(26 * scale), "bold")
-        self.font_button = (SYSTEM_FONT, int(16 * scale), "bold")
-        # Fuentes de victoria
-        self.font_win_title = (SYSTEM_FONT, int(24 * scale), "bold")
-        self.font_win_msg = (SYSTEM_FONT, int(14 * scale))
-        self.font_win_button = (SYSTEM_FONT, int(12 * scale), "bold")    
+        self.font_button = (SYSTEM_FONT, int(16 * scale), "bold") 
 
     def _start_new_round(self):
         if not GameConfig.IMAGE_FILENAMES:
@@ -134,9 +130,7 @@ class PuzzleGame:
         self.next_image_button.config(text="Siguiente Imagen")
 
     def _load_and_split_image(self):
-        # Ruta absoluta segura
         filename_to_load = os.path.join(SCRIPT_DIR, GameConfig.CURRENT_IMAGE_FILENAME)
-
         img = None
 
         if os.path.exists(filename_to_load):
@@ -144,8 +138,6 @@ class PuzzleGame:
                 img = Image.open(filename_to_load).convert("RGBA")
             except Exception as e:
                 print(f"Error cargando imagen: {e}")
-        else:
-            print(f"ADVERTENCIA: No encontrada: {filename_to_load}")
 
         # Imagen de error si falla la carga
         if img is None:
@@ -155,7 +147,6 @@ class PuzzleGame:
                 font = ImageFont.truetype("arial.ttf", 14) if platform.system() == "Windows" else ImageFont.load_default()
             except:
                 font = ImageFont.load_default()
-            
             text = f"ERROR:\n{GameConfig.CURRENT_IMAGE_FILENAME}"
             draw.text((10, 10), text, fill="black", font=font)
 
@@ -190,6 +181,7 @@ class PuzzleGame:
         self.card_canvas.place(relx=0.5, rely=0.5, anchor="center", width=card_width, height=card_height)
 
         rounded_rect_padding = 10
+        # DIBUJO CON ESQUINAS SIMÉTRICAS
         self._draw_rounded_rectangle(self.card_canvas,
                                      rounded_rect_padding, rounded_rect_padding,
                                      card_width - rounded_rect_padding, card_height - rounded_rect_padding,
@@ -278,9 +270,24 @@ class PuzzleGame:
                                       command=self._start_new_round)
         self.next_image_button.pack(side="left", padx=10) 
 
+    # ========================================================
+    # FUNCIÓN DE DIBUJO CORREGIDA (ESQUINAS SIMÉTRICAS)
+    # ========================================================
     def _draw_rounded_rectangle(self, canvas, x1, y1, x2, y2, radius, **kwargs):
-        points = [x1 + radius, y1, x2 - radius, y1, x2, y1 + radius, x2, y2 - radius,
-                  x2 - radius, y2, x1 + radius, y2, x1, y1 + radius]
+        points = [
+            (x1 + radius, y1), (x1 + radius, y1),
+            (x2 - radius, y1), (x2 - radius, y1),
+            (x2, y1),
+            (x2, y1 + radius), (x2, y1 + radius),
+            (x2, y2 - radius), (x2, y2 - radius),
+            (x2, y2),
+            (x2 - radius, y2), (x2 - radius, y2),
+            (x1 + radius, y2), (x1 + radius, y2),
+            (x1, y2),
+            (x1, y2 - radius), (x1, y2 - radius),
+            (x1, y1 + radius), (x1, y1 + radius),
+            (x1, y1)
+        ]
         canvas.create_polygon(points, smooth=True, **kwargs)
 
     def _initialize_game(self):
@@ -306,7 +313,7 @@ class PuzzleGame:
         self.piece_initial_position = {}
 
         cols = [self.left_canvas_1, self.left_canvas_2, self.right_canvas_1, self.right_canvas_2]
-        # Para 4x4 (16 piezas) repartidas en 4 columnas = 4 piezas por columna
+        # 4 columnas x 4 piezas = 16 piezas en total (Nivel 3)
         counts = [4, 4, 4, 4]
 
         idx = 0
@@ -388,7 +395,6 @@ class PuzzleGame:
             return
         x, y, canvas_widget = self.piece_initial_position[original_idx]
         
-        # Búsqueda segura del label
         for lbl in self.side_piece_labels:
             if hasattr(lbl, 'image') and lbl.image == self.piece_images[original_idx]:
                 lbl.place(x=x, y=y)
@@ -420,11 +426,9 @@ class PuzzleGame:
                 self.occupied_slots[target_slot] = img_id
                 self.piece_current_slot[original_idx] = target_slot
 
-                found_and_hidden = False
                 for lbl in self.side_piece_labels:
                     if hasattr(lbl, 'image') and lbl.image == self.piece_images[original_idx]:
                         lbl.place_forget()
-                        found_and_hidden = True
                         break
                 
                 self._check_for_win()
@@ -464,84 +468,98 @@ class PuzzleGame:
             self._show_win_screen()
             self.next_image_button.config(text="Siguiente Imagen")
 
-    # --- Pantalla de Victoria (Universal) ---
+    # =============================================================
+    # VENTANA DE FELICITACIÓN MEJORADA (ESQUINAS IGUALES)
+    # =============================================================
     def _show_win_screen(self):
-        win_screen = tk.Toplevel(self.master)
-        win_screen.title("¡Ganaste!")
-        win_width = int(400 * self.scale)
-        win_height = int(250 * self.scale)
-        win_screen.geometry(f"{win_width}x{win_height}")
-        win_screen.resizable(False, False)
-        win_screen.attributes("-topmost", True) 
-        win_screen.grab_set() 
+        # 1. Ventana sin bordes
+        win = tk.Toplevel(self.master)
+        win.overrideredirect(True) 
+        win.attributes("-topmost", True)
+        win.grab_set()
+        
+        # Dimensiones y escalado
+        w, h = int(500 * self.scale), int(350 * self.scale)
+        
+        # Centrar
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        
+        # Color del borde (El lila del juego)
+        border_color = GameConfig.BG_COLOR_MAIN 
+        win.configure(bg=border_color)
 
-        win_screen.protocol("WM_DELETE_WINDOW", lambda: self._on_win_screen_close(win_screen))
+        # 2. Canvas para fondo redondeado
+        canvas = tk.Canvas(win, width=w, height=h, bg=border_color, highlightthickness=0)
+        canvas.pack(fill="both", expand=True)
+        
+        # Rectángulo blanco con esquinas redondeadas SIMÉTRICAS
+        self._draw_rounded_rectangle(canvas, 10, 10, w-10, h-10, radius=20, fill="white", outline="white")
+        
+        # --- CONTENIDO ---
+        
+        # Título Grande
+        title_font = (SYSTEM_FONT, int(40 * self.scale), "bold")
+        tk.Label(win, text="¡Muy Bien!", font=title_font, bg="white", fg=GameConfig.SOUND_ICON_COLOR).place(relx=0.5, rely=0.25, anchor="center")
+        
+        # Subtítulo
+        sub_font = (SYSTEM_FONT, int(16 * self.scale))
+        tk.Label(win, text=f"¡Armaste: {GameConfig.CURRENT_IMAGE_NAME}!", font=sub_font, bg="white", fg=GameConfig.HEADER_TEXT_COLOR).place(relx=0.5, rely=0.5, anchor="center")
+        
+        # --- BOTONES ---
+        btn_container = tk.Frame(win, bg="white")
+        btn_container.place(relx=0.5, rely=0.75, anchor="center")
+        
+        def action(act):
+            win.destroy()
+            self.master.grab_release()
+            if act == "next": self._start_new_round()
+            elif act == "menu": self._back_to_menu()
+            
+        # Efectos Hover
+        def on_enter_purple(e): e.widget['bg'] = GameConfig.BUTTON_ACTIVE_BG_COLOR
+        def on_leave_purple(e): e.widget['bg'] = GameConfig.BUTTON_BG_COLOR
+        
+        def on_enter_blue(e): e.widget['bg'] = '#7FA6D6'
+        def on_leave_blue(e): e.widget['bg'] = '#5B84B1'
 
-        frame = tk.Frame(win_screen, bg=GameConfig.BG_COLOR_CARD, padx=20, pady=20)
-        frame.pack(expand=True, fill="both")
+        # Botón Menú
+        btn_menu = tk.Button(btn_container, text="Menú 🏠", font=self.font_button,
+                             bg="#5B84B1", fg="white", 
+                             relief="flat", cursor="hand2", padx=20, pady=10,
+                             command=lambda: action("menu"))
+        btn_menu.pack(side=tk.LEFT, padx=15)
+        
+        btn_menu.bind("<Enter>", on_enter_blue)
+        btn_menu.bind("<Leave>", on_leave_blue)
 
-        message_label = tk.Label(frame, text="¡Felicidades!",
-                                 font=self.font_win_title,
-                                 bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
-        message_label.pack(pady=(10, 5))
-
-        sub_message_label = tk.Label(frame, text="¡Completaste el rompecabezas! 🎉",
-                                      font=self.font_win_msg,
-                                      bg=GameConfig.BG_COLOR_CARD, fg=GameConfig.HEADER_TEXT_COLOR)
-        sub_message_label.pack(pady=(0, 20))
-
-        button_frame = tk.Frame(frame, bg=GameConfig.BG_COLOR_CARD)
-        button_frame.pack(pady=10)
-
-        next_button = tk.Button(button_frame, text="Siguiente Imagen",
-                                font=self.font_win_button,
-                                bg=GameConfig.BUTTON_BG_COLOR, fg=GameConfig.BUTTON_TEXT_COLOR,
-                                activebackground=GameConfig.BUTTON_ACTIVE_BG_COLOR,
-                                relief="flat", bd=0, padx=15, pady=8,
-                                command=lambda: self._handle_win_action("next", win_screen))
-        next_button.pack(side="left", padx=10)
-
-        menu_button = tk.Button(button_frame, text="Volver al Menú",
-                                font=self.font_win_button,
-                                bg=GameConfig.BUTTON_BG_COLOR, fg=GameConfig.BUTTON_TEXT_COLOR,
-                                activebackground=GameConfig.BUTTON_ACTIVE_BG_COLOR,
-                                relief="flat", bd=0, padx=15, pady=8,
-                                command=lambda: self._handle_win_action("menu", win_screen))
-        menu_button.pack(side="left", padx=10)
-
-        win_screen.update_idletasks()
-        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (win_screen.winfo_width() // 2)
-        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (win_screen.winfo_height() // 2)
-        win_screen.geometry(f"+{x}+{y}")
-
-    def _handle_win_action(self, action, win_screen):
-        win_screen.destroy() 
-        self.master.grab_release() 
-        if action == "next":
-            self._start_new_round() 
-        elif action == "menu":
-            self._back_to_menu() 
-
-    def _on_win_screen_close(self, win_screen):
-        win_screen.destroy()
-        self.master.grab_release()
+        # Botón Siguiente
+        btn_next = tk.Button(btn_container, text="Siguiente ➡", font=self.font_button,
+                             bg=GameConfig.BUTTON_BG_COLOR, fg="white", 
+                             relief="flat", cursor="hand2", padx=20, pady=10,
+                             command=lambda: action("next"))
+        btn_next.pack(side=tk.LEFT, padx=15)
+        
+        btn_next.bind("<Enter>", on_enter_purple)
+        btn_next.bind("<Leave>", on_leave_purple)
+    # =============================================================
 
     def _back_to_menu(self):
         self.master.destroy()
         try:
-            # Busca el menú en la carpeta 'menu' al lado de 'nivel3' o en la carpeta superior
             path_to_menu_script = os.path.join(SCRIPT_DIR, '..', 'menu', 'menu_rompecabezas.py')
-            path_to_menu_script = os.path.normpath(path_to_menu_script)
-            
+            path_to_menu_script = os.path.normpath(path_to_menu_script) 
+
             if not os.path.exists(path_to_menu_script):
                 path_to_menu_script = os.path.join(SCRIPT_DIR, '..', 'menu_rompecabezas.py')
-
+            
             if os.path.exists(path_to_menu_script):
                 subprocess.Popen([sys.executable, path_to_menu_script])
             else:
-                messagebox.showerror("Error", f"No se encuentra el menú: {path_to_menu_script}")
+                messagebox.showerror("Error", f"No se encuentra el menú en:\n{path_to_menu_script}")
         except Exception as e:
-            messagebox.showerror("Error", f"No se pudo iniciar el menú: {e}", parent=self.master)
+            messagebox.showerror("Error", f"Error al volver: {e}", parent=self.master)
 
 if __name__ == "__main__":
     root = tk.Tk()
