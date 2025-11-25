@@ -10,6 +10,7 @@ import platform
 
 # ========== CONFIGURACIÓN DEL SISTEMA ==========
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SYSTEM_OS = platform.system()
 
 # Intentar importar librerías de audio de forma segura
 try:
@@ -19,7 +20,7 @@ except ImportError:
     print("ERROR: Falta pygame o gTTS. Instálalos con pip: pip install pygame gTTS")
 
 def get_system_font():
-    return "Arial" if platform.system() == "Windows" else "DejaVu Sans"
+    return "Arial" if SYSTEM_OS == "Windows" else "DejaVu Sans"
 
 SYSTEM_FONT = get_system_font()
 
@@ -28,14 +29,27 @@ class FrasesGame:
         self.master = master
         master.title("Simón Dice: Las Frases")
         
-        # Configuración Pantalla Completa y Escala
+        # --- CORRECCIÓN PANTALLA COMPLETA PARA LINUX/RASPBERRY ---
+        master.update_idletasks() # Actualizar para leer tamaño real
+        
+        if SYSTEM_OS == "Windows":
+            master.attributes("-fullscreen", True)
+        else:
+            # En Linux forzamos geometría primero
+            w = master.winfo_screenwidth()
+            h = master.winfo_screenheight()
+            master.geometry(f"{w}x{h}+0+0")
+            
+            # Pequeña pausa antes de activar fullscreen
+            master.after(100, lambda: master.attributes("-fullscreen", True))
+
+        # Escala dinámica
         screen_width = master.winfo_screenwidth()
         screen_height = master.winfo_screenheight()
         base_width = 1000
         base_height = 700
         self.scale = min(screen_width / base_width, screen_height / base_height)
 
-        master.attributes("-fullscreen", True)
         master.configure(bg="#FF5757")
         
         # Salir con Escape
@@ -48,6 +62,7 @@ class FrasesGame:
         self._apply_scaling()
 
         # --- DATOS DE LAS FRASES ---
+        # IMPORTANTE: En Linux, revisa que las imágenes se llamen EXACTAMENTE así (minúsculas)
         self.all_phrases_data = [
             {
                 "phrase_text": "Mamá yo quiero comer comida",
@@ -298,9 +313,21 @@ class FrasesGame:
         canvas.pack(side=tk.LEFT, padx=int(10 * self.scale))
 
     def draw_rounded_rect(self, canvas, x1, y1, x2, y2, radius, **kwargs):
-        points = [x1 + radius, y1, x2 - radius, y1, x2, y1, x2, y1 + radius,
-                  x2, y2 - radius, x2, y2, x2 - radius, y2, x1 + radius, y2,
-                  x1, y2, x1, y2 - radius, x1, y1 + radius, x1, y1]
+        # Función corregida para esquinas simétricas
+        points = [
+            (x1 + radius, y1), (x1 + radius, y1),
+            (x2 - radius, y1), (x2 - radius, y1),
+            (x2, y1),
+            (x2, y1 + radius), (x2, y1 + radius),
+            (x2, y2 - radius), (x2, y2 - radius),
+            (x2, y2),
+            (x2 - radius, y2), (x2 - radius, y2),
+            (x1 + radius, y2), (x1 + radius, y2),
+            (x1, y2),
+            (x1, y2 - radius), (x1, y2 - radius),
+            (x1, y1 + radius), (x1, y1 + radius),
+            (x1, y1)
+        ]
         return canvas.create_polygon(points, smooth=True, **kwargs)
 
     def shuffle_available_phrases(self):
@@ -379,9 +406,6 @@ class FrasesGame:
             word = phrase_data["words"][self.current_word_in_phrase_index]["word"]
             self.play_word_audio(word)
 
-    # ========================================================
-    # LÓGICA DE NAVEGACIÓN Y FELICITACIÓN MEJORADA
-    # ========================================================
     def next_word_in_phrase(self):
         phrase_data = self.get_current_phrase_data()
         if not phrase_data: return
@@ -405,14 +429,11 @@ class FrasesGame:
         self.current_word_in_phrase_index = 0
         self.update_display()
 
-    # --- AQUÍ ESTÁ EL CAMBIO ESTÉTICO ---
+    # --- AQUÍ ESTÁ EL CAMBIO ESTÉTICO CON ESQUINAS ARREGLADAS ---
     def _show_phrase_complete_screen(self):
         # 1. Crear Toplevel y quitarle los bordes de Windows
         win = tk.Toplevel(self.master)
-        
-        # ELIMINAR BORDE DE WINDOWS (LA PARTE FEA)
         win.overrideredirect(True) 
-        
         win.attributes("-topmost", True)
         win.grab_set()
         
@@ -424,36 +445,28 @@ class FrasesGame:
         y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
         win.geometry(f"{w}x{h}+{x}+{y}")
         
-        # Fondo transparente (truco: usamos el color del juego para el borde o 'white' limpio)
-        win.configure(bg="#FF5757") # Borde Rojo para que combine
+        # Fondo transparente (truco: usamos el color del juego para el borde)
+        win.configure(bg="#FF5757") # Borde Rojo
 
         # 2. Crear un Canvas para dibujar el fondo redondeado
-        # Esto hace que parezca una tarjeta flotante
         canvas = tk.Canvas(win, width=w, height=h, bg="#FF5757", highlightthickness=0)
         canvas.pack(fill="both", expand=True)
         
-        # Dibujar rectángulo blanco redondeado dentro del fondo rojo
-        margin = 10
-        self.draw_rounded_rect(canvas, margin, margin, w-margin, h-margin, radius=20, fill="white", outline="white")
+        # Dibujar rectángulo blanco redondeado
+        self.draw_rounded_rect(canvas, 10, 10, w-10, h-10, radius=20, fill="white", outline="white")
         
         # --- CONTENIDO DE LA TARJETA ---
-        # Usamos place() relativo al canvas para poner los textos
-        
-        # Título Grande
         title_font = (SYSTEM_FONT, int(40 * self.scale), "bold")
         tk.Label(win, text="¡Muy Bien!", font=title_font, bg="white", fg="#FF5757").place(relx=0.5, rely=0.25, anchor="center")
         
-        # La frase completada
         phrase = self.get_current_phrase_data()["phrase_text"]
         phrase_font = (SYSTEM_FONT, int(18 * self.scale))
         tk.Label(win, text=f"{phrase}", font=phrase_font, bg="white", fg="black", wraplength=w-60).place(relx=0.5, rely=0.5, anchor="center")
         
         # --- BOTONES PERSONALIZADOS ---
-        # En lugar de botones grises feos, usamos botones planos con color
-        
         btn_y = 0.75
         
-        def on_enter(e): e.widget['bg'] = '#FF8E8E' # Efecto hover
+        def on_enter(e): e.widget['bg'] = '#FF8E8E'
         def on_leave(e): e.widget['bg'] = '#FF6B6B'
         
         def on_enter_blue(e): e.widget['bg'] = '#7FA6D6'
@@ -467,28 +480,23 @@ class FrasesGame:
             win.destroy()
             self.go_to_menu()
 
-        # Botón Siguiente (Rojo)
+        # Botón Siguiente
         btn_next = tk.Button(win, text="Siguiente ➡", font=self.button_font, 
                              bg="#FF6B6B", fg="white", activebackground="#FF8E8E", activeforeground="white",
                              relief="flat", cursor="hand2", padx=20, pady=10,
                              command=close_and_next)
         btn_next.place(relx=0.65, rely=btn_y, anchor="center")
-        
-        # Bind hover effects
         btn_next.bind("<Enter>", on_enter)
         btn_next.bind("<Leave>", on_leave)
 
-        # Botón Menú (Azul)
+        # Botón Menú
         btn_menu = tk.Button(win, text="Menú 🏠", font=self.button_font, 
                              bg="#5B84B1", fg="white", activebackground="#7FA6D6", activeforeground="white",
                              relief="flat", cursor="hand2", padx=20, pady=10,
                              command=close_and_menu)
         btn_menu.place(relx=0.35, rely=btn_y, anchor="center")
-        
         btn_menu.bind("<Enter>", on_enter_blue)
         btn_menu.bind("<Leave>", on_leave_blue)
-
-    # ========================================================
 
     def go_to_menu(self):
         self.master.destroy()
