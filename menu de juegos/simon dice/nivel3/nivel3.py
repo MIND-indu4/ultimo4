@@ -16,7 +16,7 @@ try:
     import pygame.mixer
     from gtts import gTTS
 except ImportError:
-    print("ERROR: Falta pygame o gTTS. Instálalos con pip.")
+    print("ERROR: Falta pygame o gTTS. Instálalos con pip: pip install pygame gTTS")
 
 def get_system_font():
     return "Arial" if platform.system() == "Windows" else "DejaVu Sans"
@@ -48,7 +48,6 @@ class FrasesGame:
         self._apply_scaling()
 
         # --- DATOS DE LAS FRASES ---
-        # IMPORTANTE: En Linux, revisa que las imágenes se llamen EXACTAMENTE así (minúsculas)
         self.all_phrases_data = [
             {
                 "phrase_text": "Mamá yo quiero comer comida",
@@ -235,7 +234,7 @@ class FrasesGame:
         except Exception as e:
             print(f"Error Mixer: {e}")
         
-        # Creamos carpeta caché para no re-generar audios siempre (más rápido en RPi)
+        # Cache de audio
         self.audio_cache_dir = os.path.join(SCRIPT_DIR, "audio_cache_phrases")
         if not os.path.exists(self.audio_cache_dir):
             os.makedirs(self.audio_cache_dir)
@@ -342,7 +341,6 @@ class FrasesGame:
         if os.path.exists(path):
             try:
                 img = Image.open(path)
-                # Escalado inteligente
                 max_w = self.image_max_size
                 max_h = self.image_max_size
                 ratio = min(max_w / img.width, max_h / img.height)
@@ -371,7 +369,6 @@ class FrasesGame:
         except Exception as e: print(e)
 
     def play_word_audio(self, text):
-        # Limpiar texto para nombre de archivo
         clean = "".join(c for c in text.lower() if c.isalnum())
         path = os.path.join(self.audio_cache_dir, f"{clean}.mp3")
         threading.Thread(target=self._generate_audio, args=(text, path)).start()
@@ -382,6 +379,9 @@ class FrasesGame:
             word = phrase_data["words"][self.current_word_in_phrase_index]["word"]
             self.play_word_audio(word)
 
+    # ========================================================
+    # LÓGICA DE NAVEGACIÓN Y FELICITACIÓN MEJORADA
+    # ========================================================
     def next_word_in_phrase(self):
         phrase_data = self.get_current_phrase_data()
         if not phrase_data: return
@@ -405,39 +405,90 @@ class FrasesGame:
         self.current_word_in_phrase_index = 0
         self.update_display()
 
+    # --- AQUÍ ESTÁ EL CAMBIO ESTÉTICO ---
     def _show_phrase_complete_screen(self):
+        # 1. Crear Toplevel y quitarle los bordes de Windows
         win = tk.Toplevel(self.master)
-        win.title("¡Bien!")
-        w, h = int(400 * self.scale), int(250 * self.scale)
-        win.geometry(f"{w}x{h}")
+        
+        # ELIMINAR BORDE DE WINDOWS (LA PARTE FEA)
+        win.overrideredirect(True) 
+        
         win.attributes("-topmost", True)
         win.grab_set()
         
-        frame = tk.Frame(win, bg="white", padx=20, pady=20)
-        frame.pack(fill="both", expand=True)
+        # Dimensiones de la ventana
+        w, h = int(500 * self.scale), int(350 * self.scale)
         
-        tk.Label(frame, text="¡Muy Bien!", font=self.title_font, bg="white", fg="#FF5757").pack(pady=5)
-        
-        phrase = self.get_current_phrase_data()["phrase_text"]
-        tk.Label(frame, text=f"Frase: {phrase}", font=self.count_font, bg="white", wraplength=w-40).pack(pady=10)
-        
-        btn_frame = tk.Frame(frame, bg="white")
-        btn_frame.pack(pady=10)
-        
-        def action(act):
-            win.destroy()
-            if act == "next": self.next_phrase()
-            elif act == "menu": self.go_to_menu()
-
-        tk.Button(btn_frame, text="Siguiente", bg="#FF6B6B", fg="white", font=self.small_button_font,
-                  command=lambda: action("next")).pack(side=tk.LEFT, padx=10)
-        tk.Button(btn_frame, text="Menú", bg="#5B84B1", fg="white", font=self.small_button_font,
-                  command=lambda: action("menu")).pack(side=tk.LEFT, padx=10)
-
-        win.update_idletasks()
+        # Centrar la ventana
         x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
         y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
-        win.geometry(f"+{x}+{y}")
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        
+        # Fondo transparente (truco: usamos el color del juego para el borde o 'white' limpio)
+        win.configure(bg="#FF5757") # Borde Rojo para que combine
+
+        # 2. Crear un Canvas para dibujar el fondo redondeado
+        # Esto hace que parezca una tarjeta flotante
+        canvas = tk.Canvas(win, width=w, height=h, bg="#FF5757", highlightthickness=0)
+        canvas.pack(fill="both", expand=True)
+        
+        # Dibujar rectángulo blanco redondeado dentro del fondo rojo
+        margin = 10
+        self.draw_rounded_rect(canvas, margin, margin, w-margin, h-margin, radius=20, fill="white", outline="white")
+        
+        # --- CONTENIDO DE LA TARJETA ---
+        # Usamos place() relativo al canvas para poner los textos
+        
+        # Título Grande
+        title_font = (SYSTEM_FONT, int(40 * self.scale), "bold")
+        tk.Label(win, text="¡Muy Bien!", font=title_font, bg="white", fg="#FF5757").place(relx=0.5, rely=0.25, anchor="center")
+        
+        # La frase completada
+        phrase = self.get_current_phrase_data()["phrase_text"]
+        phrase_font = (SYSTEM_FONT, int(18 * self.scale))
+        tk.Label(win, text=f"{phrase}", font=phrase_font, bg="white", fg="black", wraplength=w-60).place(relx=0.5, rely=0.5, anchor="center")
+        
+        # --- BOTONES PERSONALIZADOS ---
+        # En lugar de botones grises feos, usamos botones planos con color
+        
+        btn_y = 0.75
+        
+        def on_enter(e): e.widget['bg'] = '#FF8E8E' # Efecto hover
+        def on_leave(e): e.widget['bg'] = '#FF6B6B'
+        
+        def on_enter_blue(e): e.widget['bg'] = '#7FA6D6'
+        def on_leave_blue(e): e.widget['bg'] = '#5B84B1'
+
+        def close_and_next():
+            win.destroy()
+            self.next_phrase()
+
+        def close_and_menu():
+            win.destroy()
+            self.go_to_menu()
+
+        # Botón Siguiente (Rojo)
+        btn_next = tk.Button(win, text="Siguiente ➡", font=self.button_font, 
+                             bg="#FF6B6B", fg="white", activebackground="#FF8E8E", activeforeground="white",
+                             relief="flat", cursor="hand2", padx=20, pady=10,
+                             command=close_and_next)
+        btn_next.place(relx=0.65, rely=btn_y, anchor="center")
+        
+        # Bind hover effects
+        btn_next.bind("<Enter>", on_enter)
+        btn_next.bind("<Leave>", on_leave)
+
+        # Botón Menú (Azul)
+        btn_menu = tk.Button(win, text="Menú 🏠", font=self.button_font, 
+                             bg="#5B84B1", fg="white", activebackground="#7FA6D6", activeforeground="white",
+                             relief="flat", cursor="hand2", padx=20, pady=10,
+                             command=close_and_menu)
+        btn_menu.place(relx=0.35, rely=btn_y, anchor="center")
+        
+        btn_menu.bind("<Enter>", on_enter_blue)
+        btn_menu.bind("<Leave>", on_leave_blue)
+
+    # ========================================================
 
     def go_to_menu(self):
         self.master.destroy()
