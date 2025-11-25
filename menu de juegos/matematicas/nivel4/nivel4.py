@@ -16,38 +16,41 @@ def get_system_font():
 
 SYSTEM_FONT = get_system_font()
 
-# --- CONFIGURACIÓN VISUAL ---
+# --- CONFIGURACIÓN VISUAL (NIVEL 4) ---
 class GameConfig:
+    # Colores
     MAIN_COLOR = "#4CAF50"       # Verde Material Design
+    HOVER_COLOR = "#66BB6A"
     TEXT_DARK = "#212121"
     CARD_COLOR = "white"
     DIVIDER_COLOR = "#A5D6A7"    # Verde claro para líneas divisorias
     
+    # Colores Ventana Victoria
+    BTN_MENU_COLOR = "#5B84B1"
+    BTN_NEXT_COLOR = "#4CAF50"
+
     # Orden: Mil, Centena, Decena, Unidad
     BALL_TYPES = ["futbol.png", "basquet.png", "tenis.png", "voley.jpg"]
 
 # --- FUNCIONES AUXILIARES ---
-def create_rounded_rectangle(canvas, x1, y1, x2, y2, radius, **kwargs):
-    points = [x1 + radius, y1, x2 - radius, y1, x2, y1, x2, y1 + radius,
-              x2, y2 - radius, x2, y2, x2 - radius, y2, x1 + radius, y2,
-              x1, y2, x1, y2 - radius, x1, y1 + radius, x1, y1]
-    return canvas.create_polygon(points, smooth=True, **kwargs)
-
 class MathDragGameLevel4:
     def __init__(self, master):
         self.master = master
         master.title("Matemáticas - Nivel 4")
         
-        # ==========================================
-        # --- BLOQUE DE PANTALLA COMPLETA ---
-        # ==========================================
-        master.attributes("-fullscreen", True)
-        master.bind("<Escape>", lambda e: master.attributes("-fullscreen", False))
+        # --- CONFIGURACIÓN PANTALLA ---
+        master.update_idletasks() 
+        
+        if SYSTEM_OS == "Windows":
+            master.attributes("-fullscreen", True)
+        else:
+            w = master.winfo_screenwidth()
+            h = master.winfo_screenheight()
+            master.geometry(f"{w}x{h}+0+0")
+            master.after(100, lambda: master.attributes("-fullscreen", True))
         
         master.configure(bg=GameConfig.MAIN_COLOR)
-        
-        # IMPORTANTE: Forzar actualización para leer dimensiones reales en Raspberry
-        master.update_idletasks() 
+        master.bind("<Escape>", self.volver_al_menu)
 
         # Escala dinámica
         screen_width = master.winfo_screenwidth()
@@ -60,10 +63,11 @@ class MathDragGameLevel4:
         self.font_title = (SYSTEM_FONT, int(24 * self.scale), "bold")
         self.font_header = (SYSTEM_FONT, int(16 * self.scale), "bold")
         self.font_btn = (SYSTEM_FONT, int(14 * self.scale), "bold")
+        self.font_win_title = (SYSTEM_FONT, int(40 * self.scale), "bold")
         
         # Tamaños
-        self.ball_size = int(50 * self.scale) # Pelotas un poco más chicas para que entren varias
-        self.box_size = int(90 * self.scale)  # Fichas de números
+        self.ball_size = int(50 * self.scale) 
+        self.box_size = int(90 * self.scale)  
         
         self.drag_data = {"item": None, "offset_x": 0, "offset_y": 0}
         
@@ -81,7 +85,6 @@ class MathDragGameLevel4:
         sw = self.master.winfo_screenwidth()
         sh = self.master.winfo_screenheight()
         
-        # Tarjeta blanca: 90% de la pantalla
         cw = int(sw * 0.90)
         ch = int(sh * 0.90)
         cx = sw // 2
@@ -90,10 +93,10 @@ class MathDragGameLevel4:
         self.ancho_real_frame = cw - 40
         self.alto_real_frame = ch - 40
 
-        # Fondo blanco redondeado
-        create_rounded_rectangle(self.main_canvas, cx - cw//2, cy - ch//2, cx + cw//2, cy + ch//2, radius=40, fill=GameConfig.CARD_COLOR)
+        # Fondo blanco redondeado simétrico
+        self._draw_rounded_rectangle(self.main_canvas, cx - cw//2, cy - ch//2, cx + cw//2, cy + ch//2, radius=40, fill=GameConfig.CARD_COLOR, outline="")
 
-        # Frame contenido (encima del dibujo)
+        # Frame contenido
         self.content_frame = tk.Frame(self.main_canvas, bg=GameConfig.CARD_COLOR)
         self.content_frame.place(x=cx - cw//2 + 20, y=cy - ch//2 + 20, width=self.ancho_real_frame, height=self.alto_real_frame)
 
@@ -107,22 +110,21 @@ class MathDragGameLevel4:
         tk.Label(self.content_frame, text="Cuenta las pelotas y arrastra el número correcto", font=self.font_title, 
                  bg=GameConfig.CARD_COLOR, fg=GameConfig.TEXT_DARK).pack(pady=(10, 10))
 
-        # --- ÁREA SUPERIOR: LOS 4 CASILLEROS PARA RESPONDER ---
+        # --- ÁREA SUPERIOR: LOS 4 CASILLEROS ---
         self.frame_top_container = tk.Frame(self.content_frame, bg=GameConfig.CARD_COLOR)
         self.frame_top_container.pack(pady=(10, 10))
 
         self.target_widgets = []
-        # Creamos los 4 slots vacíos
         for i in range(4):
             lbl = tk.Label(self.frame_top_container, bg=GameConfig.CARD_COLOR, bd=0)
             lbl.pack(side="left", padx=15)
             self.target_widgets.append(lbl)
 
-        # --- ÁREA CENTRAL: COLUMNAS CON PELOTAS ---
+        # --- ÁREA CENTRAL: COLUMNAS ---
         self.frame_columns = tk.Frame(self.content_frame, bg=GameConfig.CARD_COLOR)
         self.frame_columns.pack(expand=True, fill="both", padx=40, pady=5)
         
-        for i in range(7): # 4 columnas + 3 separadores
+        for i in range(7): 
             if i % 2 == 0: self.frame_columns.columnconfigure(i, weight=1)
             else: self.frame_columns.columnconfigure(i, weight=0)
         self.frame_columns.rowconfigure(1, weight=1)
@@ -133,33 +135,44 @@ class MathDragGameLevel4:
         for i, title in enumerate(headers):
             grid_col = i * 2
             
-            # Título Columna
             tk.Label(self.frame_columns, text=title, font=self.font_header, 
                      bg=GameConfig.CARD_COLOR, fg="#555").grid(row=0, column=grid_col, pady=(0,5))
             
-            # Área donde se dibujarán las pelotas
-            ball_area = tk.Frame(self.frame_columns, bg="#F1F8E9") # Fondo verde muy claro 
+            ball_area = tk.Frame(self.frame_columns, bg="#F1F8E9") 
             ball_area.grid(row=1, column=grid_col, sticky="nsew", padx=5)
             self.column_areas.append(ball_area)
 
-            # Divisor
             if i < 3:
                 sep_col = grid_col + 1
                 separator = tk.Frame(self.frame_columns, bg=GameConfig.DIVIDER_COLOR, width=2)
                 separator.grid(row=0, column=sep_col, rowspan=2, sticky="ns", padx=2)
 
-    def _start_new_round(self):
-        # 1. Limpiar pelotas visuales
-        for area in self.column_areas:
-            for widget in area.winfo_children():
-                widget.destroy()
-        
-        # 2. Limpiar fichas de números (arrastrables)
-        for widget in self.content_frame.winfo_children():
-            if hasattr(widget, "es_ficha_numero"):
-                widget.destroy()
+    # --- DIBUJO SIMÉTRICO ---
+    def _draw_rounded_rectangle(self, canvas, x1, y1, x2, y2, radius, **kwargs):
+        points = [
+            (x1 + radius, y1), (x1 + radius, y1),
+            (x2 - radius, y1), (x2 - radius, y1),
+            (x2, y1),
+            (x2, y1 + radius), (x2, y1 + radius),
+            (x2, y2 - radius), (x2, y2 - radius),
+            (x2, y2),
+            (x2 - radius, y2), (x2 - radius, y2),
+            (x1 + radius, y2), (x1 + radius, y2),
+            (x1, y2),
+            (x1, y2 - radius), (x1, y2 - radius),
+            (x1, y1 + radius), (x1, y1 + radius),
+            (x1, y1)
+        ]
+        return canvas.create_polygon(points, smooth=True, **kwargs)
 
-        # 3. Reiniciar Slots superiores
+    def _start_new_round(self):
+        # Limpiar
+        for area in self.column_areas:
+            for widget in area.winfo_children(): widget.destroy()
+        
+        for widget in self.content_frame.winfo_children():
+            if hasattr(widget, "es_ficha_numero"): widget.destroy()
+
         self.img_slot_vacio = self.crear_imagen_slot_vacio()
         self.slots_filled = [False] * 4
         
@@ -168,18 +181,18 @@ class MathDragGameLevel4:
             slot.image = self.img_slot_vacio
             slot.ocupado_por = None
 
-        # 4. Generar cantidades (No usar 0 para hacerlo más visual)
+        # Generar
         d1 = random.randint(1, 4)
         d2 = random.randint(1, 5)
         d3 = random.randint(1, 5)
         d4 = random.randint(1, 5)
         self.target_values = [d1, d2, d3, d4]
         
-        # 5. DIBUJAR PELOTAS EN LAS COLUMNAS
+        # Dibujar pelotas
         for i, cantidad in enumerate(self.target_values):
             self.dibujar_pelotas_en_columna(i, cantidad)
 
-        # 6. Generar Fichas de Números (Opciones)
+        # Generar Fichas
         opciones = self.target_values.copy()
         while len(opciones) < 6: 
             n = random.randint(1, 9)
@@ -187,7 +200,6 @@ class MathDragGameLevel4:
         
         random.shuffle(opciones)
 
-        # 7. Posicionar Fichas abajo (Relativo al alto del frame)
         y_pos = self.alto_real_frame - int(140 * self.scale)
         zona_width = self.ancho_real_frame // 6
         
@@ -199,7 +211,6 @@ class MathDragGameLevel4:
             lbl.valor = val 
             lbl.es_ficha_numero = True
             
-            # Centrar en su zona
             x_pos = (i * zona_width) + (zona_width // 2) - (self.box_size // 2)
             
             lbl.place(x=x_pos, y=y_pos)
@@ -207,18 +218,15 @@ class MathDragGameLevel4:
             lbl.home_y = y_pos
             lbl.bloqueado = False 
 
-            # Bindings de arrastre
             lbl.bind("<Button-1>", self.start_drag)
             lbl.bind("<B1-Motion>", self.do_drag)
             lbl.bind("<ButtonRelease-1>", self.end_drag)
 
     def dibujar_pelotas_en_columna(self, col_idx, cantidad):
-        """Dibuja las pelotas estáticas en la columna correspondiente"""
         area = self.column_areas[col_idx]
         tipo_pelota = GameConfig.BALL_TYPES[col_idx]
         img_pelota = self.crear_imagen_pelota(tipo_pelota)
         
-        # Frame interno centrado
         inner = tk.Frame(area, bg=area.cget("bg"))
         inner.place(relx=0.5, rely=0.1, anchor="n")
         
@@ -244,7 +252,6 @@ class MathDragGameLevel4:
         widget = self.drag_data["item"]
         if not widget: return
         
-        # Coordenadas globales a relativas del frame
         x_root = event.x_root
         y_root = event.y_root
         frame_x = self.content_frame.winfo_rootx()
@@ -265,7 +272,6 @@ class MathDragGameLevel4:
 
         encontrado = False
         
-        # Verificar si cayó en alguno de los 4 slots
         for i, target in enumerate(self.target_widgets):
             if self.slots_filled[i]: continue 
             
@@ -276,7 +282,6 @@ class MathDragGameLevel4:
             
             if tx < drop_x < tx + tw and ty < drop_y < ty + th:
                 if widget.valor == self.target_values[i]:
-                    # Posicionar relativo al frame
                     final_x = tx - self.content_frame.winfo_rootx()
                     final_y = ty - self.content_frame.winfo_rooty()
                     
@@ -289,31 +294,69 @@ class MathDragGameLevel4:
                     encontrado = True
                     
                     if all(self.slots_filled):
-                        self.master.after(300, self.game_win)
+                        self.master.after(300, self._show_win_screen)
                     break
         
         if not encontrado:
             widget.place(x=widget.home_x, y=widget.home_y)
 
-    def game_win(self):
+    # =============================================================
+    # PANTALLA DE FELICITACIÓN PERSONALIZADA (VERDE)
+    # =============================================================
+    def _show_win_screen(self):
         win = tk.Toplevel(self.master)
-        win.title("¡Ganaste!")
-        w, h = 400, 280
-        cx = self.master.winfo_screenwidth() // 2
-        cy = self.master.winfo_screenheight() // 2
-        win.geometry(f"{w}x{h}+{cx-w//2}+{cy-h//2}")
-        win.configure(bg="white")
         win.overrideredirect(True)
         win.attributes("-topmost", True)
+        win.grab_set()
 
-        tk.Frame(win, bg=GameConfig.MAIN_COLOR, height=15).pack(fill="x")
-        tk.Label(win, text="¡Correcto!", font=("Arial", 26, "bold"), bg="white", fg=GameConfig.MAIN_COLOR).pack(pady=(30, 10))
-        tk.Label(win, text="¡Contaste muy bien! 🧠", font=("Arial", 14), bg="white", fg="#555").pack(pady=10)
+        w, h = int(500 * self.scale), int(350 * self.scale)
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
+        win.geometry(f"{w}x{h}+{x}+{y}")
         
-        btn = tk.Label(win, text="Siguiente Ejercicio", font=("Arial", 14, "bold"),
-                       bg=GameConfig.MAIN_COLOR, fg="white", padx=20, pady=10, cursor="hand2")
-        btn.pack(pady=20)
-        btn.bind("<Button-1>", lambda e: [win.destroy(), self._start_new_round()])
+        border_color = GameConfig.MAIN_COLOR 
+        win.configure(bg=border_color)
+
+        canvas = tk.Canvas(win, width=w, height=h, bg=border_color, highlightthickness=0)
+        canvas.pack(fill="both", expand=True)
+        
+        self._draw_rounded_rectangle(canvas, 10, 10, w-10, h-10, radius=20, fill="white", outline="white")
+        
+        tk.Label(win, text="¡Muy Bien!", font=self.font_win_title, bg="white", fg=GameConfig.MAIN_COLOR).place(relx=0.5, rely=0.25, anchor="center")
+        
+        sub_font = (SYSTEM_FONT, int(16 * self.scale))
+        tk.Label(win, text="¡Has contado correctamente! 🔢", font=sub_font, bg="white", fg=GameConfig.TEXT_DARK).place(relx=0.5, rely=0.5, anchor="center")
+        
+        btn_container = tk.Frame(win, bg="white")
+        btn_container.place(relx=0.5, rely=0.75, anchor="center")
+        
+        def action(act):
+            win.destroy()
+            if act == "next": self._start_new_round()
+            elif act == "menu": self.volver_al_menu()
+            
+        def on_enter_green(e): e.widget['bg'] = GameConfig.HOVER_COLOR
+        def on_leave_green(e): e.widget['bg'] = GameConfig.BTN_NEXT_COLOR
+        
+        def on_enter_blue(e): e.widget['bg'] = '#7FA6D6'
+        def on_leave_blue(e): e.widget['bg'] = GameConfig.BTN_MENU_COLOR
+
+        btn_menu = tk.Button(btn_container, text="Menú 🏠", font=self.font_btn,
+                             bg=GameConfig.BTN_MENU_COLOR, fg="white", 
+                             relief="flat", cursor="hand2", padx=20, pady=10,
+                             command=lambda: action("menu"))
+        btn_menu.pack(side=tk.LEFT, padx=15)
+        btn_menu.bind("<Enter>", on_enter_blue)
+        btn_menu.bind("<Leave>", on_leave_blue)
+
+        btn_next = tk.Button(btn_container, text="Siguiente ➡", font=self.font_btn,
+                             bg=GameConfig.BTN_NEXT_COLOR, fg="white", 
+                             relief="flat", cursor="hand2", padx=20, pady=10,
+                             command=lambda: action("next"))
+        btn_next.pack(side=tk.LEFT, padx=15)
+        btn_next.bind("<Enter>", on_enter_green)
+        btn_next.bind("<Leave>", on_leave_green)
+    # =============================================================
 
     # --- GENERADORES GRÁFICOS ---
     def crear_imagen_numero(self, numero):
@@ -351,15 +394,15 @@ class MathDragGameLevel4:
         img = Image.new("RGBA", (s, s), (255, 255, 255, 0))
         draw = ImageDraw.Draw(img)
         
-        # Búsqueda de archivos (Busca en nivel 3 que es donde suelen estar las pelotas)
         item_img = None
-        posibles = [tipo, os.path.join("..", "nivel3", tipo), os.path.join("assets", tipo)]
+        # Busca imágenes en carpetas cercanas (nivel 3 suele tener las pelotas)
+        rutas = [tipo, os.path.join("..", "nivel3", tipo), os.path.join("assets", tipo)]
         
-        for p in posibles:
-            full_p = os.path.join(SCRIPT_DIR, p)
-            if os.path.exists(full_p):
+        for p in rutas:
+            fp = os.path.join(SCRIPT_DIR, p)
+            if os.path.exists(fp):
                 try:
-                    item_img = Image.open(full_p).convert("RGBA")
+                    item_img = Image.open(fp).convert("RGBA")
                     break
                 except: pass
 
@@ -367,21 +410,17 @@ class MathDragGameLevel4:
             img_res = item_img.resize((s, s), Image.Resampling.LANCZOS)
             return ImageTk.PhotoImage(img_res)
         else:
-            # Fallback Dibujos (Si no encuentra la imagen)
+            # Fallback
             draw.ellipse([2, 2, s-2, s-2], outline="black", width=2)
             if "futbol" in tipo:
                 draw.ellipse([2, 2, s-2, s-2], fill="white", outline="black")
                 draw.ellipse([s*0.4, s*0.4, s*0.6, s*0.6], fill="black") 
             elif "basquet" in tipo:
                 draw.ellipse([2, 2, s-2, s-2], fill="#FF9800", outline="black")
-                draw.line([s/2, 2, s/2, s-2], fill="black", width=2)
             elif "tenis" in tipo:
                 draw.ellipse([2, 2, s-2, s-2], fill="#CCFF00", outline="black")
-                draw.arc([s*0.2, -s*0.2, s*1.2, s*0.8], 140, 240, fill="white", width=2)
             elif "voley" in tipo:
                 draw.ellipse([2, 2, s-2, s-2], fill="#FFEB3B", outline="black")
-                draw.chord([2, 2, s-2, s-2], 120, 240, fill="#0055A4", outline="black")
-                draw.chord([2, 2, s-2, s-2], 300, 60, fill="#0055A4", outline="black")
             
             return ImageTk.PhotoImage(img)
 
@@ -396,7 +435,7 @@ class MathDragGameLevel4:
             else:
                 subprocess.Popen([sys.executable, path])
         else:
-            messagebox.showerror("Error", f"Menú no encontrado en:\n{path}")
+            messagebox.showerror("Error", f"No se encontró el menú en:\n{path}")
 
 if __name__ == "__main__":
     root = tk.Tk()
